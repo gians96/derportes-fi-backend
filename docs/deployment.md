@@ -1,0 +1,60 @@
+# Despliegue — Backend
+
+El backend se despliega como **servicio independiente** (sin docker-compose),
+pensado para **Dokploy**. Consume una **MariaDB externa** vía `DATABASE_URL`.
+
+## Imagen Docker
+
+Build multi-stage (Bun para construir, Node 22 alpine para ejecutar). Ver
+[`Dockerfile`](../Dockerfile).
+
+- Expone el puerto **3001** y arranca con `node dist/main.js`.
+- Crea `uploads/vouchers` dentro del contenedor.
+
+```powershell
+docker build -t deportes-fi-backend .
+docker run -p 3001:3001 --env-file .env deportes-fi-backend
+```
+
+## Variables de entorno
+
+| Variable               | Descripción | Ejemplo |
+| ---------------------- | ----------- | ------- |
+| `DATABASE_URL`         | URL completa MariaDB externa | `mysql://user:pass@host:3306/deportes_fi` |
+| `PORT`                 | Puerto HTTP | `3001` |
+| `CORS_ORIGIN`          | Orígenes permitidos (coma) | `https://deportes-fi.undc.edu.pe` |
+| `JWT_SECRET`           | Clave de firma JWT | *(secreto fuerte)* |
+| `JWT_EXPIRES_IN`       | Expiración del token | `7d` |
+| `GOOGLE_CLIENT_ID`     | Client ID de Google (mismo que el frontend) | |
+| `INSTITUTIONAL_DOMAIN` | Dominio de correo permitido | `undc.edu.pe` |
+| `ACADEMIC_API_URL`     | Endpoint del padrón SIVIRENO | *(ver `.env.example`)* |
+| `UPLOADS_DIR`          | Carpeta de archivos subidos | `uploads` |
+| `OWNER_EMAILS`         | Correos con rol owner (coma) | |
+| `ADMIN_EMAILS`         | Correos con rol admin (coma) | |
+
+> Plantilla completa en [`.env.example`](../.env.example). **Nunca** se commitea
+> el `.env` real (está en `.gitignore`).
+
+## Pasos en Dokploy
+
+1. Crear una **Application** apuntando al repositorio del backend (build por
+   Dockerfile).
+2. Definir todas las variables de entorno anteriores.
+3. Exponer el puerto **3001** y mapear el dominio público (`/api/v1`).
+4. **Volumen persistente** montado en `UPLOADS_DIR` (`/app/uploads`) para
+   conservar los vouchers entre despliegues.
+5. Migraciones de base de datos en el arranque/CI:
+   ```bash
+   bunx prisma migrate deploy
+   ```
+   (o `prisma db push` si no se usan migraciones versionadas).
+
+## Checklist de producción
+
+- [ ] `DATABASE_URL` apunta a la MariaDB correcta y el usuario tiene privilegios.
+- [ ] `JWT_SECRET` único y fuerte (no el de ejemplo).
+- [ ] `CORS_ORIGIN` con el dominio real del frontend.
+- [ ] `GOOGLE_CLIENT_ID` coincide con el del frontend y el dominio está
+      autorizado en Google Cloud Console (orígenes JS).
+- [ ] Volumen persistente para `uploads/`.
+- [ ] `prisma migrate deploy` ejecutado tras desplegar.
