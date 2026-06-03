@@ -1,0 +1,240 @@
+// Prisma schema - Sistema de Deportes Facultad de Ingeniería UNDC
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER_SYSTEM
+  ADMIN_SYSTEM
+  STUDENT
+}
+
+enum Gender {
+  M
+  F
+  O
+}
+
+enum DisciplineModality {
+  TEAM
+  INDIVIDUAL
+}
+
+enum GenderPolicy {
+  MALE
+  FEMALE
+  MIXED
+  FREE
+}
+
+enum CompetitionFormat {
+  ELIMINATION
+  POINTS
+}
+
+enum RegistrationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum VoucherStatus {
+  PENDING
+  VALIDATED
+  REJECTED
+}
+
+enum MatchStatus {
+  PENDING
+  IN_PROGRESS
+  PLAYED
+  CANCELLED
+  POSTPONED
+}
+
+model Faculty {
+  id      Int     @id @default(autoincrement())
+  name    String
+  acronym String?
+
+  schools ProfessionalSchool[]
+  events  SportEvent[]
+  users   User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProfessionalSchool {
+  id        Int     @id @default(autoincrement())
+  name      String
+  facultyId Int
+  faculty   Faculty @relation(fields: [facultyId], references: [id])
+
+  events SportEvent[]
+  users  User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id          Int     @id @default(autoincrement())
+  email       String  @unique
+  fullName    String
+  googleSub   String? @unique
+  avatarUrl   String?
+  role        Role    @default(STUDENT)
+  isActive    Boolean @default(true)
+  studentCode String? @unique
+  dni         String?
+  facultyId   Int?
+  faculty     Faculty? @relation(fields: [facultyId], references: [id])
+  schoolId    Int?
+  school      ProfessionalSchool? @relation(fields: [schoolId], references: [id])
+
+  delegatedTeams Team[] @relation("TeamDelegate")
+  participations Participant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SportEvent {
+  id          Int     @id @default(autoincrement())
+  name        String
+  description String? @db.Text
+  facultyId   Int
+  faculty     Faculty @relation(fields: [facultyId], references: [id])
+  schoolId    Int?
+  school      ProfessionalSchool? @relation(fields: [schoolId], references: [id])
+  startDate   DateTime
+  endDate     DateTime
+  isOpen      Boolean @default(true)
+
+  disciplines Discipline[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Discipline {
+  id                   Int                @id @default(autoincrement())
+  eventId              Int
+  event                SportEvent         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name                 String
+  modality             DisciplineModality @default(TEAM)
+  genderPolicy         GenderPolicy       @default(FREE)
+  format               CompetitionFormat  @default(ELIMINATION)
+  minPlayers           Int                @default(1)
+  maxPlayers           Int                @default(1)
+  maxTeams             Int                @default(0)
+  isPaid               Boolean            @default(false)
+  cost                 Decimal            @default(0) @db.Decimal(10, 2)
+  rulesText            String?            @db.Text
+  extraInfo            String?            @db.Text
+  registrationDeadline DateTime
+
+  teams     Team[]
+  matches   Match[]
+  standings Standing[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Team {
+  id              Int                @id @default(autoincrement())
+  name            String
+  disciplineId    Int
+  discipline      Discipline         @relation(fields: [disciplineId], references: [id], onDelete: Cascade)
+  delegateId      Int
+  delegate        User               @relation("TeamDelegate", fields: [delegateId], references: [id])
+  phone           String?
+  status          RegistrationStatus @default(PENDING)
+  rejectionReason String?            @db.Text
+
+  participants Participant[]
+  voucher      Voucher?
+  homeMatches  Match[]       @relation("HomeTeam")
+  awayMatches  Match[]       @relation("AwayTeam")
+  wonMatches   Match[]       @relation("WinnerTeam")
+  standing     Standing?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Participant {
+  id          Int     @id @default(autoincrement())
+  teamId      Int
+  team        Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId      Int?
+  user        User?   @relation(fields: [userId], references: [id])
+  fullName    String
+  studentCode String?
+  dni         String?
+  gender      Gender  @default(O)
+  isDelegate  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+}
+
+model Voucher {
+  id              Int           @id @default(autoincrement())
+  teamId          Int           @unique
+  team            Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  operationNumber String?
+  amount          Decimal       @default(0) @db.Decimal(10, 2)
+  imageUrl        String
+  status          VoucherStatus @default(PENDING)
+  rejectionReason String?       @db.Text
+  validatedById   Int?
+
+  uploadedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Match {
+  id           Int         @id @default(autoincrement())
+  disciplineId Int
+  discipline   Discipline  @relation(fields: [disciplineId], references: [id], onDelete: Cascade)
+  round        Int         @default(1)
+  homeTeamId   Int?
+  homeTeam     Team?       @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeamId   Int?
+  awayTeam     Team?       @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  homeScore    Int?
+  awayScore    Int?
+  winnerTeamId Int?
+  winnerTeam   Team?       @relation("WinnerTeam", fields: [winnerTeamId], references: [id])
+  status       MatchStatus @default(PENDING)
+  scheduledAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Standing {
+  id           Int        @id @default(autoincrement())
+  disciplineId Int
+  discipline   Discipline @relation(fields: [disciplineId], references: [id], onDelete: Cascade)
+  teamId       Int        @unique
+  team         Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  played       Int        @default(0)
+  won          Int        @default(0)
+  drawn        Int        @default(0)
+  lost         Int        @default(0)
+  goalsFor     Int        @default(0)
+  goalsAgainst Int        @default(0)
+  points       Int        @default(0)
+
+  updatedAt DateTime @updatedAt
+}
