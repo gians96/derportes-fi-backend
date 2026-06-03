@@ -5,7 +5,7 @@ import { UpdateEventDto } from './dto/update-event.dto';
 
 @Injectable()
 export class EventsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   findAll() {
     return this.prisma.sportEvent.findMany({
@@ -25,11 +25,20 @@ export class EventsService {
     return event;
   }
 
-  findDisciplines(eventId: number) {
-    return this.prisma.discipline.findMany({
+  async findDisciplines(eventId: number) {
+    const disciplines = await this.prisma.discipline.findMany({
       where: { eventId },
       include: { _count: { select: { teams: true } } },
       orderBy: { name: 'asc' },
+    });
+    return disciplines.map((discipline) => {
+      // Desestructuramos para separar _count del resto de las propiedades
+      const { _count, ...rest } = discipline;
+
+      return {
+        ...rest,
+        teamsCount: _count.teams,
+      };
     });
   }
 

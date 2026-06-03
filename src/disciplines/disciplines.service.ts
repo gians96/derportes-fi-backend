@@ -53,6 +53,7 @@ export class DisciplinesService {
         modality: dto.modality,
         genderPolicy: dto.genderPolicy,
         format: dto.format,
+        participantType: dto.participantType,
         minPlayers: dto.minPlayers,
         maxPlayers: dto.maxPlayers,
         maxTeams: dto.maxTeams,
@@ -76,6 +77,9 @@ export class DisciplinesService {
           genderPolicy: dto.genderPolicy,
         }),
         ...(dto.format !== undefined && { format: dto.format }),
+        ...(dto.participantType !== undefined && {
+          participantType: dto.participantType,
+        }),
         ...(dto.minPlayers !== undefined && { minPlayers: dto.minPlayers }),
         ...(dto.maxPlayers !== undefined && { maxPlayers: dto.maxPlayers }),
         ...(dto.maxTeams !== undefined && { maxTeams: dto.maxTeams }),

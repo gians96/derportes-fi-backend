@@ -36,8 +36,22 @@ export class RegistrationsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.OWNER_SYSTEM, Role.ADMIN_SYSTEM)
   @Get()
-  findAll(@Query('status') status?: RegistrationStatus) {
-    return this.registrations.findAll(status);
+  findAll(
+    @Query('status') status?: RegistrationStatus,
+    @Query('eventId') eventId?: string,
+    @Query('facultyId') facultyId?: string,
+    @Query('schoolId') schoolId?: string,
+    @Query('disciplineId') disciplineId?: string,
+    @Query('isPaid') isPaid?: string,
+  ) {
+    return this.registrations.findAll({
+      status,
+      eventId: eventId ? Number(eventId) : undefined,
+      facultyId: facultyId ? Number(facultyId) : undefined,
+      schoolId: schoolId ? Number(schoolId) : undefined,
+      disciplineId: disciplineId ? Number(disciplineId) : undefined,
+      isPaid: isPaid === undefined ? undefined : isPaid === 'true',
+    });
   }
 
   @UseGuards(JwtAuthGuard)

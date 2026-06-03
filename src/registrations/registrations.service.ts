@@ -19,12 +19,51 @@ import {
 export class RegistrationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(status?: RegistrationStatus) {
+  findAll(filters?: {
+    status?: RegistrationStatus;
+    eventId?: number;
+    facultyId?: number;
+    schoolId?: number;
+    disciplineId?: number;
+    isPaid?: boolean;
+  }) {
+    const disciplineWhere: Prisma.DisciplineWhereInput = {};
+    if (filters?.eventId) disciplineWhere.eventId = filters.eventId;
+    if (filters?.isPaid !== undefined) disciplineWhere.isPaid = filters.isPaid;
+
+    const eventWhere: Prisma.SportEventWhereInput = {};
+    if (filters?.facultyId) eventWhere.facultyId = filters.facultyId;
+    if (filters?.schoolId) eventWhere.schoolId = filters.schoolId;
+    if (Object.keys(eventWhere).length) disciplineWhere.event = eventWhere;
+
+    const where: Prisma.TeamWhereInput = {};
+    if (filters?.status) where.status = filters.status;
+    if (filters?.disciplineId) where.disciplineId = filters.disciplineId;
+    if (Object.keys(disciplineWhere).length) where.discipline = disciplineWhere;
+
     return this.prisma.team.findMany({
-      where: status ? { status } : undefined,
+      where,
       include: {
         participants: true,
-        discipline: { select: { name: true } },
+        discipline: {
+          select: {
+            id: true,
+            name: true,
+            isPaid: true,
+            cost: true,
+            minPlayers: true,
+            maxPlayers: true,
+            genderPolicy: true,
+            event: {
+              select: {
+                id: true,
+                name: true,
+                faculty: { select: { id: true, name: true } },
+                school: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
         voucher: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -33,10 +72,18 @@ export class RegistrationsService {
 
   async findMine(userId: number) {
     return this.prisma.team.findMany({
-      where: { delegateId: userId },
+      where: {
+        OR: [{ delegateId: userId }, { participants: { some: { userId } } }],
+      },
       include: {
         participants: true,
-        discipline: { select: { name: true } },
+        discipline: {
+          select: {
+            name: true,
+            participantType: true,
+            event: { select: { name: true } },
+          },
+        },
         voucher: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -137,6 +184,35 @@ export class RegistrationsService {
 
     const delegateIndex = dto.participants.findIndex((p) => p.isDelegate);
 
+    // Vincula cada integrante con su usuario (si existe) por código de
+    // estudiante o por DNI, para que luego vea sus equipos/horarios.
+    const codes = dto.participants
+      .map((p) => p.studentCode)
+      .filter((c): c is string => !!c);
+    const dnis = dto.participants
+      .map((p) => p.dni)
+      .filter((d): d is string => !!d);
+    const matchUsers =
+      codes.length || dnis.length
+        ? await this.prisma.user.findMany({
+            where: {
+              OR: [
+                ...(codes.length ? [{ studentCode: { in: codes } }] : []),
+                ...(dnis.length ? [{ dni: { in: dnis } }] : []),
+              ],
+            },
+            select: { id: true, studentCode: true, dni: true },
+          })
+        : [];
+    const byCode = new Map(
+      matchUsers
+        .filter((u) => u.studentCode)
+        .map((u) => [u.studentCode as string, u.id]),
+    );
+    const byDni = new Map(
+      matchUsers.filter((u) => u.dni).map((u) => [u.dni as string, u.id]),
+    );
+
     return this.prisma.$transaction(async (tx) => {
       const team = await tx.team.create({
         data: {
@@ -146,13 +222,22 @@ export class RegistrationsService {
           phone: dto.phone,
           status: RegistrationStatus.PENDING,
           participants: {
-            create: dto.participants.map((p, i) => ({
-              fullName: p.fullName,
-              studentCode: p.studentCode ?? null,
-              dni: p.dni ?? null,
-              gender: p.gender ?? 'O',
-              isDelegate: i === delegateIndex,
-            })),
+            create: dto.participants.map((p, i) => {
+              let userId: number | null = null;
+              if (p.studentCode && byCode.has(p.studentCode)) {
+                userId = byCode.get(p.studentCode) ?? null;
+              } else if (p.dni && byDni.has(p.dni)) {
+                userId = byDni.get(p.dni) ?? null;
+              }
+              return {
+                fullName: p.fullName,
+                studentCode: p.studentCode ?? null,
+                dni: p.dni ?? null,
+                gender: p.gender ?? 'O',
+                isDelegate: i === delegateIndex,
+                userId,
+              };
+            }),
           },
         },
       });

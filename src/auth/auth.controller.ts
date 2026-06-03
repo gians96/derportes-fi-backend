@@ -29,6 +29,11 @@ export class AuthController {
     @CurrentUser() user: RequestUser,
     @Body() dto: UpdateProfileDto,
   ) {
-    return this.auth.updateProfile(user.id, dto.facultyId, dto.schoolId);
+    return this.auth.updateProfile(
+      user.id,
+      dto.facultyId,
+      dto.schoolId,
+      dto.dni,
+    );
   }
 }

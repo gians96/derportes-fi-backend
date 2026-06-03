@@ -12,6 +12,7 @@ Provider: `mysql` (MariaDB externa). Fuente de verdad:
 | `DisciplineModality` | `TEAM`, `INDIVIDUAL` |
 | `GenderPolicy`       | `MALE`, `FEMALE`, `MIXED`, `FREE` |
 | `CompetitionFormat`  | `ELIMINATION`, `POINTS` |
+| `ParticipantType`    | `STUDENT`, `OTHER` |
 | `RegistrationStatus` | `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED` |
 | `VoucherStatus`      | `PENDING`, `VALIDATED`, `REJECTED` |
 | `MatchStatus`        | `PENDING`, `IN_PROGRESS`, `PLAYED`, `CANCELLED`, `POSTPONED` |
@@ -42,10 +43,15 @@ User 0/1 ──* Participant (vínculo opcional al usuario real)
   hasta el primer login). `isActive` controla el acceso (soft-delete). `dni`,
   `studentCode` opcionales; `facultyId`/`schoolId` opcionales.
 - **Discipline**: `cost` es `Decimal(10,2)`; `maxTeams = 0` significa sin límite;
-  `registrationDeadline` cierra inscripciones.
+  `registrationDeadline` cierra inscripciones. `participantType` (`STUDENT` por
+  defecto) define la fuente de validación de integrantes: `STUDENT` valida
+  contra el padrón SIVIRENO por código; `OTHER` valida por DNI contra RENIEC
+  (Decolecta).
 - **Team**: nace `PENDING`; `rejectionReason` cuando se rechaza.
 - **Participant**: guarda `fullName`/`studentCode`/`dni` (snapshot del padrón) y
-  puede vincularse a un `User` real vía `userId`.
+  puede vincularse a un `User` real vía `userId`. El vínculo se crea
+  automáticamente al inscribir un equipo y al loguear/completar perfil, casando
+  por `studentCode` o `dni`.
 - **Voucher**: 1:1 con `Team`; `imageUrl` apunta a `uploads/vouchers/...`.
 - **Match** / **Standing**: soporte para brackets (eliminación) y tabla de
   posiciones (puntos). Endpoints de avance/resultados pendientes (ver roadmap).

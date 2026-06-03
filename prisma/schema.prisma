@@ -38,6 +38,11 @@ enum CompetitionFormat {
   POINTS
 }
 
+enum ParticipantType {
+  STUDENT
+  OTHER
+}
+
 enum RegistrationStatus {
   PENDING
   APPROVED
@@ -133,6 +138,7 @@ model Discipline {
   modality             DisciplineModality @default(TEAM)
   genderPolicy         GenderPolicy       @default(FREE)
   format               CompetitionFormat  @default(ELIMINATION)
+  participantType      ParticipantType    @default(STUDENT)
   minPlayers           Int                @default(1)
   maxPlayers           Int                @default(1)
   maxTeams             Int                @default(0)

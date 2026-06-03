@@ -27,7 +27,9 @@ docker run -p 3001:3001 --env-file .env deportes-fi-backend
 | `JWT_EXPIRES_IN`       | Expiración del token | `7d` |
 | `GOOGLE_CLIENT_ID`     | Client ID de Google (mismo que el frontend) | |
 | `INSTITUTIONAL_DOMAIN` | Dominio de correo permitido | `undc.edu.pe` |
-| `ACADEMIC_API_URL`     | Endpoint del padrón SIVIRENO | *(ver `.env.example`)* |
+| `ACADEMIC_API_URL`     | Endpoint del padrón SIVIRENO (validación de estudiantes) | *(ver `.env.example`)* |
+| `DECOLECTA_API_URL`    | Endpoint RENIEC vía Decolecta (validación por DNI) | `https://api.decolecta.com/v1/reniec/dni` |
+| `DECOLECTA_TOKEN`      | Token Bearer de Decolecta | *(secreto)* |
 | `UPLOADS_DIR`          | Carpeta de archivos subidos | `uploads` |
 | `OWNER_EMAILS`         | Correos con rol owner (coma) | |
 | `ADMIN_EMAILS`         | Correos con rol admin (coma) | |

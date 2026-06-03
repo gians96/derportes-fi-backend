@@ -25,4 +25,15 @@ export class AcademicController {
     }
     return student;
   }
+
+  @Get('dni')
+  async findByDni(@Query('numero') numero: string) {
+    const person = await this.academic.findByDni((numero ?? '').trim());
+    if (!person) {
+      throw new NotFoundException(
+        'No se encontró una persona con ese número de DNI',
+      );
+    }
+    return person;
+  }
 }

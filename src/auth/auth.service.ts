@@ -72,6 +72,7 @@ export class AuthService {
 
     const code = email.split('@')[0];
     const user = await this.upsertUser(email, code, payload);
+    await this.linkParticipants(user);
     const token = this.signToken(user);
 
     return {
@@ -132,8 +133,8 @@ export class AuthService {
         .findUniqueStudent(code)
         .catch(() => null);
       if (academic) {
-        fullName = academic.estudiante.replace(/\s+/g, ' ').trim();
-        studentCode = academic.codEstu;
+        fullName = academic.fullName.replace(/\s+/g, ' ').trim();
+        studentCode = academic.studentCode;
       }
     }
 
@@ -164,6 +165,21 @@ export class AuthService {
     });
   }
 
+  /**
+   * Vincula los integrantes (Participant) que aún no tienen usuario asociado
+   * con este usuario, haciendo match por código de estudiante o por DNI.
+   */
+  private async linkParticipants(user: Pick<User, 'id' | 'studentCode' | 'dni'>) {
+    const or: { studentCode?: string; dni?: string }[] = [];
+    if (user.studentCode) or.push({ studentCode: user.studentCode });
+    if (user.dni) or.push({ dni: user.dni });
+    if (!or.length) return;
+    await this.prisma.participant.updateMany({
+      where: { userId: null, OR: or },
+      data: { userId: user.id },
+    });
+  }
+
   async getProfile(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -173,6 +189,7 @@ export class AuthService {
         fullName: true,
         role: true,
         studentCode: true,
+        dni: true,
         facultyId: true,
         schoolId: true,
         avatarUrl: true,
@@ -184,7 +201,12 @@ export class AuthService {
     return user;
   }
 
-  async updateProfile(userId: number, facultyId: number, schoolId: number) {
+  async updateProfile(
+    userId: number,
+    facultyId: number,
+    schoolId: number,
+    dni?: string,
+  ) {
     const school = await this.prisma.professionalSchool.findUnique({
       where: { id: schoolId },
     });
@@ -196,10 +218,13 @@ export class AuthService {
         'La escuela no pertenece a la facultad seleccionada',
       );
     }
-    await this.prisma.user.update({
+    const cleanDni = dni?.trim() || undefined;
+    const user = await this.prisma.user.update({
       where: { id: userId },
-      data: { facultyId, schoolId },
+      data: { facultyId, schoolId, ...(cleanDni ? { dni: cleanDni } : {}) },
+      select: { id: true, studentCode: true, dni: true },
     });
+    await this.linkParticipants(user);
     return this.getProfile(userId);
   }
 }

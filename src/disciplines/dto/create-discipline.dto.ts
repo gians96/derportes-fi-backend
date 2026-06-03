@@ -13,6 +13,7 @@ import {
   CompetitionFormat,
   DisciplineModality,
   GenderPolicy,
+  ParticipantType,
 } from '@prisma/client';
 
 export class CreateDisciplineDto {
@@ -34,6 +35,10 @@ export class CreateDisciplineDto {
   @IsOptional()
   @IsEnum(CompetitionFormat)
   format?: CompetitionFormat;
+
+  @IsOptional()
+  @IsEnum(ParticipantType)
+  participantType?: ParticipantType;
 
   @IsOptional()
   @IsInt()

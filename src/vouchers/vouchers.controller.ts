@@ -26,8 +26,20 @@ export class VouchersController {
   constructor(private readonly vouchers: VouchersService) {}
 
   @Get()
-  findAll(@Query('status') status?: VoucherStatus) {
-    return this.vouchers.findAll(status);
+  findAll(
+    @Query('status') status?: VoucherStatus,
+    @Query('eventId') eventId?: string,
+    @Query('facultyId') facultyId?: string,
+    @Query('schoolId') schoolId?: string,
+    @Query('disciplineId') disciplineId?: string,
+  ) {
+    return this.vouchers.findAll({
+      status,
+      eventId: eventId ? Number(eventId) : undefined,
+      facultyId: facultyId ? Number(facultyId) : undefined,
+      schoolId: schoolId ? Number(schoolId) : undefined,
+      disciplineId: disciplineId ? Number(disciplineId) : undefined,
+    });
   }
 
   @Patch(':id/validate')

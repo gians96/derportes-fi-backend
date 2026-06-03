@@ -16,7 +16,10 @@ Notación de la columna *Auth*:
 ## Auth
 
 ### `POST /auth/google` — `público`
-Inicia sesión con el `idToken` de Google Identity.
+Inicia sesión con el `idToken` de Google Identity. Solo se aceptan correos del
+dominio institucional (`INSTITUTIONAL_DOMAIN`). En el primer login de un
+estudiante se enriquece su perfil contra el padrón SIVIRENO y se **vinculan**
+los `Participant` previos que coincidan por `studentCode` o `dni`.
 ```json
 // request
 { "idToken": "<google-id-token>" }
@@ -25,29 +28,47 @@ Inicia sesión con el `idToken` de Google Identity.
   "token": "<jwt>",
   "user": {
     "id": 1, "email": "ej@undc.edu.pe", "fullName": "...",
-    "role": "STUDENT", "facultyId": null, "schoolId": null, "avatarUrl": null
+    "role": "STUDENT", "studentCode": "2020...", "dni": null,
+    "facultyId": null, "schoolId": null, "avatarUrl": null
   }
 }
 ```
 Errores: `401` correo no institucional / token inválido.
 
 ### `GET /auth/me` — `auth`
-Devuelve el perfil del usuario del token.
+Devuelve el perfil del usuario del token (incluye `studentCode` y `dni`).
 
 ### `PATCH /auth/me/profile` — `auth`
-Completa facultad/escuela (primer login del estudiante).
+Completa facultad/escuela (primer login del estudiante). Acepta `dni` opcional:
+se usa cuando el correo **no** corresponde a un código de estudiante, para poder
+vincular sus inscripciones por DNI.
 ```json
-{ "facultyId": 1, "schoolId": 3 }
+{ "facultyId": 1, "schoolId": 3, "dni": "12345678" }
 ```
-Valida que la escuela pertenezca a la facultad.
+Valida que la escuela pertenezca a la facultad y que el `dni` tenga 8 dígitos.
+Tras guardar, vincula los `Participant` que coincidan por `dni`.
 
 ---
 
 ## Academic
 
+Los dos endpoints normalizan su salida al mismo objeto **`AcademicPerson`**:
+```json
+{ "fullName": "PEREZ JUAN", "studentCode": "2020..." | null, "dni": "12345678" | null }
+```
+
 ### `GET /academic/student?buscador=<dni|codigo>` — `auth`
-Consulta el padrón SIVIRENO. **Solo responde cuando hay exactamente un
-resultado** (privacidad). Respuesta: `{ estudiante, codEstu, ... }`.
+Consulta el padrón **SIVIRENO** (disciplinas de tipo `STUDENT`). **Solo responde
+cuando hay exactamente un resultado** (privacidad). `404` si no hay coincidencia
+única.
+
+### `GET /academic/dni?numero=<8 dígitos>` — `auth`
+Consulta **RENIEC vía Decolecta** (disciplinas de tipo `OTHER`/externos). Valida
+que `numero` tenga 8 dígitos. `404` si el DNI no existe; `503` si falta el token
+de Decolecta. Devuelve `AcademicPerson` con `studentCode: null`.
+
+> Detalle de los servicios externos en
+> [Integraciones externas](#integraciones-externas).
 
 ---
 
@@ -109,6 +130,7 @@ resultado** (privacidad). Respuesta: `{ estudiante, codEstu, ... }`.
   "modality": "TEAM",            // TEAM | INDIVIDUAL
   "genderPolicy": "MALE",        // MALE | FEMALE | MIXED | FREE
   "format": "ELIMINATION",       // ELIMINATION | POINTS
+  "participantType": "STUDENT",  // STUDENT (padrón SIVIRENO) | OTHER (DNI/RENIEC)
   "minPlayers": 7,
   "maxPlayers": 12,
   "maxTeams": 16,                // 0 = sin límite
@@ -119,6 +141,8 @@ resultado** (privacidad). Respuesta: `{ estudiante, codEstu, ... }`.
   "registrationDeadline": "2026-06-20"
 }
 ```
+`participantType` define cómo se buscan los integrantes en el frontend:
+`STUDENT` → `GET /academic/student`; `OTHER` → `GET /academic/dni`.
 
 ---
 
@@ -126,11 +150,15 @@ resultado** (privacidad). Respuesta: `{ estudiante, codEstu, ... }`.
 
 | Método | Ruta                         | Auth  | Notas |
 | ------ | ---------------------------- | ----- | ----- |
-| GET    | `/registrations?status=`     | admin | `status` ∈ `PENDING\|APPROVED\|REJECTED\|CANCELLED` |
-| GET    | `/registrations/mine`        | auth  | Equipos donde el usuario es delegado |
+| GET    | `/registrations?status=`     | admin | `status` ∈ `PENDING\|APPROVED\|REJECTED\|CANCELLED`; filtros `?eventId=&facultyId=&schoolId=&disciplineId=&isPaid=` |
+| GET    | `/registrations/mine`        | auth  | Equipos donde el usuario es **delegado o integrante** (match por `userId`) |
 | POST   | `/registrations`             | auth  | **multipart/form-data** ver ↓ |
 | PATCH  | `/registrations/:id/approve` | admin | |
 | PATCH  | `/registrations/:id/reject`  | admin | `{ "reason": "…" }` |
+
+> El panel admin separa la gestión por tipo de disciplina: los equipos
+> **gratuitos** se validan en `/admin/inscripciones` (`?isPaid=false`) y los de
+> **pago** en `/admin/vouchers`.
 
 ### `POST /registrations` (multipart/form-data)
 | Campo            | Tipo   | Obligatorio | Notas |
@@ -155,6 +183,9 @@ resultado** (privacidad). Respuesta: `{ estudiante, codEstu, ... }`.
 Reglas del servidor: plazo de inscripción vigente, mín/máx de jugadores,
 política de género, **sin integrantes duplicados** (código/DNI), límite de
 equipos y voucher obligatorio si `isPaid`. El equipo nace en estado `PENDING`.
+Cada integrante se **vincula automáticamente** a su `User` (si existe) por
+`studentCode` o `dni`, de modo que el estudiante vea ese equipo en
+`/registrations/mine`.
 
 ---
 
@@ -162,9 +193,16 @@ equipos y voucher obligatorio si `isPaid`. El equipo nace en estado `PENDING`.
 
 | Método | Ruta                      | Auth  | Body |
 | ------ | ------------------------- | ----- | ---- |
-| GET    | `/vouchers?status=`       | admin | `status` ∈ `PENDING\|VALIDATED\|REJECTED` |
+| GET    | `/vouchers?status=`       | admin | `status` ∈ `PENDING\|VALIDATED\|REJECTED`; filtros `?eventId=&facultyId=&schoolId=&disciplineId=` |
 | PATCH  | `/vouchers/:id/validate`  | admin | — |
 | PATCH  | `/vouchers/:id/reject`    | admin | `{ "reason": "…" }` |
+
+Cada elemento de la lista incluye datos del equipo y de la disciplina para la
+validación: `teamName`, `phone`, `operationNumber`, `amount`, `imageUrl`,
+`status`, `disciplineName`, **`participantType`**, `genderPolicy`,
+`minPlayers`/`maxPlayers`, `eventName`, `facultyName`, `schoolName`,
+`participantsCount` y `participants[]` (cada uno con su `userId` si está
+vinculado).
 
 ---
 
@@ -206,6 +244,39 @@ no puede autenticarse (rechazado en `JwtStrategy`).
 
 ---
 
+## Integraciones externas
+
+El backend consume dos servicios externos para validar la identidad de los
+integrantes. Las URLs y credenciales se configuran por variables de entorno
+(ver `.env.example`); **nunca** se exponen al frontend.
+
+### SIVIRENO — Padrón académico UNDC
+- **Var. entorno**: `ACADEMIC_API_URL`
+  (`https://sivireno.undc.edu.pe/tiger/consulta/con_searchEstudiante.php`).
+- **Consumido por**: `GET /academic/student` y el enriquecimiento de perfil en
+  `POST /auth/google`.
+- **Uso**: validar integrantes de disciplinas `participantType = STUDENT` y
+  precargar datos del estudiante al loguear.
+- **Normalización**: la respuesta cruda (`estudiante`/`codEstu` y variantes) se
+  mapea a `AcademicPerson { fullName, studentCode, dni }`. Solo se devuelve si
+  hay **un único** resultado (privacidad).
+
+### Decolecta — RENIEC (consulta de DNI)
+- **Var. entorno**: `DECOLECTA_API_URL`
+  (`https://api.decolecta.com/v1/reniec/dni`) y `DECOLECTA_TOKEN`.
+- **Método**: `GET ?numero=<8 dígitos>` con header
+  `Authorization: Bearer <DECOLECTA_TOKEN>`.
+- **Consumido por**: `GET /academic/dni`.
+- **Uso**: validar integrantes de disciplinas `participantType = OTHER`
+  (externos, no estudiantes).
+- **Respuesta cruda**: `{ first_name, first_last_name, second_last_name,
+  full_name, document_number }` → se mapea a `AcademicPerson { fullName:
+  full_name, dni: document_number, studentCode: null }`.
+- **Errores**: `503` si `DECOLECTA_TOKEN` no está configurado; `404` si el DNI
+  no existe.
+
+---
+
 ## Errores comunes
 
 | Código | Significado |
@@ -214,3 +285,4 @@ no puede autenticarse (rechazado en `JwtStrategy`).
 | 401    | Token ausente/ inválido o usuario inhabilitado |
 | 403    | Rol insuficiente para la operación |
 | 404    | Recurso no encontrado |
+| 503    | Servicio externo no disponible (p. ej. `DECOLECTA_TOKEN` ausente) |

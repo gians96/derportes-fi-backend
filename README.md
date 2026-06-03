@@ -24,7 +24,8 @@ cp .env.example .env
 | `JWT_SECRET` / `JWT_EXPIRES_IN` | Configuración de JWT |
 | `GOOGLE_CLIENT_ID` | Client ID de Google (igual que el frontend) |
 | `INSTITUTIONAL_DOMAIN` | Dominio permitido (`undc.edu.pe`) |
-| `ACADEMIC_API_URL` | Endpoint del padrón académico |
+| `ACADEMIC_API_URL` | Endpoint del padrón SIVIRENO (estudiantes) |
+| `DECOLECTA_API_URL` / `DECOLECTA_TOKEN` | Endpoint y token RENIEC vía Decolecta (externos por DNI) |
 | `UPLOADS_DIR` | Directorio de archivos subidos (default `uploads`) |
 | `OWNER_EMAILS` / `ADMIN_EMAILS` | Correos con rol elevado (separados por coma) |
 
@@ -56,7 +57,8 @@ node dist/main.js
 
 - `POST /auth/google` — login con ID token de Google
 - `GET /auth/me` — perfil autenticado
-- `GET /academic/student?buscador=` — consulta de padrón (único resultado)
+- `GET /academic/student?buscador=` — consulta padrón SIVIRENO (único resultado)
+- `GET /academic/dni?numero=` — consulta RENIEC vía Decolecta (8 dígitos)
 - `GET /events`, `GET /events/:id`, `GET /events/:id/disciplines`
 - `GET /disciplines`, `GET /disciplines/:id`
 - `POST /registrations` (multipart con voucher), `GET /registrations/mine`
