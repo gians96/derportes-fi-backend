@@ -79,6 +79,8 @@ export class RegistrationsController {
       disciplineId: Number(body.disciplineId),
       teamName: body.teamName,
       phone: body.phone,
+      cycle: body.cycle,
+      section: body.section,
       operationNumber: body.operationNumber,
       participants,
     };

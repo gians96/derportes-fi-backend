@@ -5,8 +5,10 @@ import {
 } from '@nestjs/common';
 import {
   GenderPolicy,
+  ParticipantType,
   Prisma,
   RegistrationStatus,
+  Role,
   VoucherStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -45,12 +47,22 @@ export class RegistrationsService {
       where,
       include: {
         participants: true,
+        delegate: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            studentCode: true,
+            dni: true,
+          },
+        },
         discipline: {
           select: {
             id: true,
             name: true,
             isPaid: true,
             cost: true,
+            participantType: true,
             minPlayers: true,
             maxPlayers: true,
             genderPolicy: true,
@@ -77,11 +89,33 @@ export class RegistrationsService {
       },
       include: {
         participants: true,
+        delegate: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            studentCode: true,
+            dni: true,
+          },
+        },
         discipline: {
           select: {
+            id: true,
             name: true,
+            isPaid: true,
+            cost: true,
             participantType: true,
-            event: { select: { name: true } },
+            minPlayers: true,
+            maxPlayers: true,
+            genderPolicy: true,
+            event: {
+              select: {
+                id: true,
+                name: true,
+                faculty: { select: { id: true, name: true } },
+                school: { select: { id: true, name: true } },
+              },
+            },
           },
         },
         voucher: true,
@@ -92,6 +126,7 @@ export class RegistrationsService {
 
   private validateAgainstDiscipline(
     discipline: {
+      participantType: ParticipantType;
       minPlayers: number;
       maxPlayers: number;
       genderPolicy: GenderPolicy;
@@ -100,25 +135,63 @@ export class RegistrationsService {
     },
     participants: ParticipantDto[],
     currentTeamCount: number,
+    options: {
+      checkCapacity?: boolean;
+      cycle?: string | null;
+      section?: string | null;
+    } = { checkCapacity: true },
   ) {
-    if (new Date() > discipline.registrationDeadline) {
+    if (options.checkCapacity !== false && new Date() > discipline.registrationDeadline) {
       throw new BadRequestException(
         'El plazo de inscripción para esta disciplina ya cerró',
       );
     }
 
-    if (discipline.maxTeams > 0 && currentTeamCount >= discipline.maxTeams) {
+    if (
+      options.checkCapacity !== false &&
+      discipline.maxTeams > 0 &&
+      currentTeamCount >= discipline.maxTeams
+    ) {
       throw new BadRequestException(
         'Se alcanzó el número máximo de equipos para esta disciplina',
       );
     }
 
+    const countedParticipants = this.countedParticipants(
+      discipline.participantType,
+      participants,
+    );
+
     if (
-      participants.length < discipline.minPlayers ||
-      participants.length > discipline.maxPlayers
+      discipline.participantType === ParticipantType.STUDENT &&
+      participants.some((p) => !p.studentCode)
     ) {
       throw new BadRequestException(
-        `El equipo debe tener entre ${discipline.minPlayers} y ${discipline.maxPlayers} integrantes`,
+        'Las disciplinas para estudiantes requieren codigo de estudiante en todos los integrantes',
+      );
+    }
+
+    if (discipline.participantType === ParticipantType.STUDENT && (!options.cycle || !options.section)) {
+      throw new BadRequestException(
+        'Las disciplinas para estudiantes requieren ciclo y seccion del equipo',
+      );
+    }
+
+    if (
+      discipline.participantType === ParticipantType.OTHER &&
+      participants.some((p) => !p.dni)
+    ) {
+      throw new BadRequestException(
+        'Las disciplinas para otros participantes requieren DNI en todos los integrantes',
+      );
+    }
+
+    if (
+      countedParticipants < discipline.minPlayers ||
+      countedParticipants > discipline.maxPlayers
+    ) {
+      throw new BadRequestException(
+        `El equipo debe tener entre ${discipline.minPlayers} y ${discipline.maxPlayers} jugadores. Tiene ${countedParticipants}.`,
       );
     }
 
@@ -146,6 +219,44 @@ export class RegistrationsService {
     }
   }
 
+  private countedParticipants(
+    _participantType: ParticipantType,
+    participants: Pick<ParticipantDto, 'countsAsPlayer'>[],
+  ) {
+    return participants.length;
+  }
+
+  private validateParticipantAccess(
+    discipline: { participantType: ParticipantType },
+    user: { role: Role; email: string; studentCode: string | null; dni?: string | null },
+  ) {
+    if (user.role === Role.OWNER_SYSTEM || user.role === Role.ADMIN_SYSTEM) {
+      return;
+    }
+
+    if (user.role === Role.OTHER) {
+      if (!user.dni) {
+        throw new BadRequestException(
+          'Completa tu perfil validando tu DNI antes de inscribirte.',
+        );
+      }
+      return;
+    }
+
+    const userType =
+      user.role === Role.STUDENT || user.studentCode || /^\d+@/.test(user.email)
+        ? ParticipantType.STUDENT
+        : ParticipantType.OTHER;
+
+    if (discipline.participantType !== userType) {
+      throw new BadRequestException(
+        discipline.participantType === ParticipantType.STUDENT
+          ? 'Esta disciplina es solo para estudiantes con codigo institucional.'
+          : 'Esta disciplina es solo para otros participantes institucionales.',
+      );
+    }
+  }
+
   async create(
     userId: number,
     dto: CreateRegistrationDto,
@@ -161,6 +272,15 @@ export class RegistrationsService {
     }
 
     const finalDelegateId = delegateId ?? userId;
+    const requester = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, email: true, studentCode: true, dni: true },
+    });
+    if (!requester) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+    this.validateParticipantAccess(discipline, requester);
+
     if (delegateId) {
       const delegate = await this.prisma.user.findUnique({
         where: { id: delegateId },
@@ -174,6 +294,7 @@ export class RegistrationsService {
       discipline,
       dto.participants,
       discipline._count.teams,
+      { cycle: dto.cycle?.trim() || null, section: dto.section?.trim() || null },
     );
 
     if (discipline.isPaid && !voucherPath) {
@@ -181,8 +302,6 @@ export class RegistrationsService {
         'Esta disciplina requiere adjuntar el comprobante de pago',
       );
     }
-
-    const delegateIndex = dto.participants.findIndex((p) => p.isDelegate);
 
     // Vincula cada integrante con su usuario (si existe) por código de
     // estudiante o por DNI, para que luego vea sus equipos/horarios.
@@ -219,10 +338,12 @@ export class RegistrationsService {
           name: dto.teamName,
           disciplineId: discipline.id,
           delegateId: finalDelegateId,
+          cycle: dto.cycle?.trim() || null,
+          section: dto.section?.trim() || null,
           phone: dto.phone,
           status: RegistrationStatus.PENDING,
           participants: {
-            create: dto.participants.map((p, i) => {
+            create: dto.participants.map((p) => {
               let userId: number | null = null;
               if (p.studentCode && byCode.has(p.studentCode)) {
                 userId = byCode.get(p.studentCode) ?? null;
@@ -234,7 +355,8 @@ export class RegistrationsService {
                 studentCode: p.studentCode ?? null,
                 dni: p.dni ?? null,
                 gender: p.gender ?? 'O',
-                isDelegate: i === delegateIndex,
+                isDelegate: false,
+                countsAsPlayer: true,
                 userId,
               };
             }),
@@ -262,8 +384,24 @@ export class RegistrationsService {
   }
 
   async approve(id: number) {
-    const team = await this.prisma.team.findUnique({ where: { id } });
+    const team = await this.prisma.team.findUnique({
+      where: { id },
+      include: { participants: true, discipline: true, voucher: true },
+    });
     if (!team) throw new NotFoundException('Equipo no encontrado');
+    this.validateAgainstDiscipline(team.discipline, team.participants, 0, {
+      checkCapacity: false,
+      cycle: team.cycle,
+      section: team.section,
+    });
+    if (
+      team.discipline.isPaid &&
+      team.voucher?.status !== VoucherStatus.VALIDATED
+    ) {
+      throw new BadRequestException(
+        'Primero valida el voucher del equipo pagado',
+      );
+    }
     return this.prisma.team.update({
       where: { id },
       data: { status: RegistrationStatus.APPROVED, rejectionReason: null },

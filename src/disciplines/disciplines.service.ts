@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, RegistrationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDisciplineDto } from './dto/create-discipline.dto';
 import { UpdateDisciplineDto } from './dto/update-discipline.dto';
@@ -36,6 +36,18 @@ export class DisciplinesService {
       where: { id },
       include: {
         event: { select: { id: true, name: true } },
+        teams: {
+          where: { status: RegistrationStatus.APPROVED },
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            cycle: true,
+            section: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        },
         _count: { select: { teams: true } },
       },
     });

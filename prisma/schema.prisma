@@ -13,6 +13,7 @@ enum Role {
   OWNER_SYSTEM
   ADMIN_SYSTEM
   STUDENT
+  OTHER
 }
 
 enum Gender {
@@ -163,6 +164,8 @@ model Team {
   discipline      Discipline         @relation(fields: [disciplineId], references: [id], onDelete: Cascade)
   delegateId      Int
   delegate        User               @relation("TeamDelegate", fields: [delegateId], references: [id])
+  cycle           String?
+  section         String?
   phone           String?
   status          RegistrationStatus @default(PENDING)
   rejectionReason String?            @db.Text
@@ -189,6 +192,7 @@ model Participant {
   dni         String?
   gender      Gender  @default(O)
   isDelegate  Boolean @default(false)
+  countsAsPlayer Boolean @default(true)
 
   createdAt DateTime @default(now())
 }

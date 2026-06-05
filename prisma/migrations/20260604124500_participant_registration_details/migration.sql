@@ -1,0 +1,4 @@
+ALTER TABLE `Participant`
+  ADD COLUMN `cycle` VARCHAR(191) NULL,
+  ADD COLUMN `section` VARCHAR(191) NULL,
+  ADD COLUMN `countsAsPlayer` BOOLEAN NOT NULL DEFAULT true;

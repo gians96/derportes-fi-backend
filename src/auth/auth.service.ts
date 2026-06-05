@@ -55,6 +55,7 @@ export class AuthService {
       | 'fullName'
       | 'role'
       | 'studentCode'
+      | 'dni'
       | 'facultyId'
       | 'schoolId'
       | 'avatarUrl'
@@ -83,6 +84,7 @@ export class AuthService {
         fullName: user.fullName,
         role: user.role,
         studentCode: user.studentCode,
+        dni: user.dni,
         facultyId: user.facultyId,
         schoolId: user.schoolId,
         avatarUrl: user.avatarUrl,
@@ -110,7 +112,8 @@ export class AuthService {
   private resolveRole(email: string): Role {
     if (this.ownerEmails.includes(email)) return Role.OWNER_SYSTEM;
     if (this.adminEmails.includes(email)) return Role.ADMIN_SYSTEM;
-    return Role.STUDENT;
+    const account = email.split('@')[0] ?? '';
+    return /^\d+$/.test(account) ? Role.STUDENT : Role.OTHER;
   }
 
   private async upsertUser(
@@ -120,7 +123,9 @@ export class AuthService {
   ): Promise<User> {
     const existing = await this.prisma.user.findUnique({ where: { email } });
     const role =
-      existing && existing.role !== Role.STUDENT
+      existing &&
+      existing.role !== Role.STUDENT &&
+      existing.role !== Role.OTHER
         ? existing.role
         : this.resolveRole(email);
 
@@ -129,6 +134,9 @@ export class AuthService {
     let studentCode = existing?.studentCode ?? null;
 
     if (role === Role.STUDENT) {
+      if (/^\d+$/.test(code)) {
+        studentCode = studentCode ?? code;
+      }
       const academic = await this.academic
         .findUniqueStudent(code)
         .catch(() => null);
@@ -152,6 +160,7 @@ export class AuthService {
         fullName,
         googleSub: payload.sub,
         avatarUrl: payload.picture ?? null,
+        role,
         ...(studentCode ? { studentCode } : {}),
       },
     });
@@ -203,10 +212,44 @@ export class AuthService {
 
   async updateProfile(
     userId: number,
-    facultyId: number,
-    schoolId: number,
+    facultyId?: number,
+    schoolId?: number,
     dni?: string,
   ) {
+    const current = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    if (!current) {
+      throw new UnauthorizedException('Usuario no encontrado');
+    }
+
+    if (current.role === Role.OTHER) {
+      const cleanDni = dni?.trim();
+      if (!cleanDni || !/^\d{8}$/.test(cleanDni)) {
+        throw new BadRequestException('El DNI debe tener 8 digitos');
+      }
+      const person = await this.academic.findByDni(cleanDni);
+      if (!person) {
+        throw new BadRequestException('No se pudo validar el DNI');
+      }
+      const user = await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          fullName: person.fullName,
+          dni: person.dni ?? cleanDni,
+          facultyId: null,
+          schoolId: null,
+        },
+        select: { id: true, studentCode: true, dni: true },
+      });
+      await this.linkParticipants(user);
+      return this.getProfile(userId);
+    }
+
+    if (!facultyId || !schoolId) {
+      throw new BadRequestException('Selecciona facultad y escuela');
+    }
     const school = await this.prisma.professionalSchool.findUnique({
       where: { id: schoolId },
     });

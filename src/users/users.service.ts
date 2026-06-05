@@ -39,9 +39,13 @@ export class UsersService {
   }
 
   async create(actor: RoleActor, dto: CreateUserDto) {
-    if (actor.role === Role.ADMIN_SYSTEM && dto.role !== Role.STUDENT) {
+    if (
+      actor.role === Role.ADMIN_SYSTEM &&
+      dto.role !== Role.STUDENT &&
+      dto.role !== Role.OTHER
+    ) {
       throw new ForbiddenException(
-        'Un administrador solo puede crear estudiantes',
+        'Un administrador solo puede crear estudiantes u otros usuarios',
       );
     }
 
@@ -57,10 +61,10 @@ export class UsersService {
         email: dto.email,
         fullName: dto.fullName,
         role: dto.role,
-        facultyId: dto.facultyId ?? null,
-        schoolId: dto.schoolId ?? null,
+        facultyId: dto.role === Role.OTHER ? null : (dto.facultyId ?? null),
+        schoolId: dto.role === Role.OTHER ? null : (dto.schoolId ?? null),
         dni: dto.dni ?? null,
-        studentCode: dto.studentCode ?? null,
+        studentCode: dto.role === Role.OTHER ? null : (dto.studentCode ?? null),
       },
       select: userSelect,
     });
@@ -85,10 +89,18 @@ export class UsersService {
       data: {
         ...(dto.fullName !== undefined && { fullName: dto.fullName }),
         ...(dto.email !== undefined && { email: dto.email }),
-        ...(dto.facultyId !== undefined && { facultyId: dto.facultyId }),
-        ...(dto.schoolId !== undefined && { schoolId: dto.schoolId }),
+        ...(user.role === Role.OTHER
+          ? { facultyId: null, schoolId: null }
+          : {
+              ...(dto.facultyId !== undefined && { facultyId: dto.facultyId }),
+              ...(dto.schoolId !== undefined && { schoolId: dto.schoolId }),
+            }),
         ...(dto.dni !== undefined && { dni: dto.dni }),
-        ...(dto.studentCode !== undefined && { studentCode: dto.studentCode }),
+        ...(user.role === Role.OTHER
+          ? { studentCode: null }
+          : dto.studentCode !== undefined
+            ? { studentCode: dto.studentCode }
+            : {}),
       },
       select: userSelect,
     });
@@ -113,9 +125,13 @@ export class UsersService {
   }
 
   private assertCanManage(actor: RoleActor, targetRole: Role) {
-    if (actor.role === Role.ADMIN_SYSTEM && targetRole !== Role.STUDENT) {
+    if (
+      actor.role === Role.ADMIN_SYSTEM &&
+      targetRole !== Role.STUDENT &&
+      targetRole !== Role.OTHER
+    ) {
       throw new ForbiddenException(
-        'Un administrador solo puede gestionar estudiantes',
+        'Un administrador solo puede gestionar estudiantes u otros usuarios',
       );
     }
   }
@@ -130,9 +146,9 @@ export class UsersService {
     // Un administrador no puede asignar roles elevados ni tocar a otros
     // administradores; solo el owner tiene ese poder.
     if (actor.role === Role.ADMIN_SYSTEM) {
-      if (role !== Role.STUDENT) {
+      if (role !== Role.STUDENT && role !== Role.OTHER) {
         throw new ForbiddenException(
-          'Un administrador solo puede asignar el rol de estudiante',
+          'Un administrador solo puede asignar roles de estudiante u otro',
         );
       }
       if (user.role === Role.ADMIN_SYSTEM) {
@@ -144,7 +160,12 @@ export class UsersService {
 
     return this.prisma.user.update({
       where: { id },
-      data: { role },
+      data: {
+        role,
+        ...(role === Role.OTHER
+          ? { facultyId: null, schoolId: null, studentCode: null }
+          : {}),
+      },
       select: userSelect,
     });
   }

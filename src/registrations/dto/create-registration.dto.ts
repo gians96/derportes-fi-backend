@@ -23,11 +23,15 @@ export class ParticipantDto {
   dni?: string | null;
 
   @IsOptional()
+  @IsString()
   @IsEnum(Gender)
   gender?: Gender;
 
   @IsOptional()
   isDelegate?: boolean;
+
+  @IsOptional()
+  countsAsPlayer?: boolean;
 }
 
 export class CreateRegistrationDto {
@@ -41,6 +45,16 @@ export class CreateRegistrationDto {
   @IsOptional()
   @IsString()
   phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  cycle?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  section?: string | null;
 
   @IsOptional()
   @IsString()

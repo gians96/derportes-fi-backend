@@ -1,5 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, RegistrationStatus, VoucherStatus } from '@prisma/client';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  GenderPolicy,
+  ParticipantType,
+  Prisma,
+  RegistrationStatus,
+  VoucherStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -37,6 +43,8 @@ export class VouchersService {
           select: {
             id: true,
             name: true,
+            cycle: true,
+            section: true,
             phone: true,
             participants: {
               select: {
@@ -46,6 +54,7 @@ export class VouchersService {
                 dni: true,
                 gender: true,
                 isDelegate: true,
+                countsAsPlayer: true,
                 userId: true,
               },
             },
@@ -76,6 +85,8 @@ export class VouchersService {
       id: v.id,
       teamId: v.teamId,
       teamName: v.team.name,
+      cycle: v.team.cycle,
+      section: v.team.section,
       phone: v.team.phone,
       operationNumber: v.operationNumber ?? '',
       amount: Number(v.amount),
@@ -96,9 +107,93 @@ export class VouchersService {
     }));
   }
 
+  private countedParticipants(
+    participants: { countsAsPlayer: boolean }[],
+  ) {
+    return participants.length;
+  }
+
+  private validateTeamRules(team: {
+    participants: {
+      gender: string;
+      isDelegate: boolean;
+      countsAsPlayer: boolean;
+      studentCode: string | null;
+      dni: string | null;
+    }[];
+    cycle: string | null;
+    section: string | null;
+    discipline: {
+      participantType: ParticipantType;
+      minPlayers: number;
+      maxPlayers: number;
+      genderPolicy: GenderPolicy;
+    };
+  }) {
+    const count = this.countedParticipants(team.participants);
+
+    if (
+      team.discipline.participantType === ParticipantType.STUDENT &&
+      team.participants.some((p) => !p.studentCode)
+    ) {
+      throw new BadRequestException(
+        'Las disciplinas para estudiantes requieren codigo de estudiante en todos los integrantes',
+      );
+    }
+
+    if (
+      team.discipline.participantType === ParticipantType.STUDENT &&
+      (!team.cycle || !team.section)
+    ) {
+      throw new BadRequestException(
+        'Las disciplinas para estudiantes requieren ciclo y seccion del equipo',
+      );
+    }
+
+    if (
+      team.discipline.participantType === ParticipantType.OTHER &&
+      team.participants.some((p) => !p.dni)
+    ) {
+      throw new BadRequestException(
+        'Las disciplinas para otros participantes requieren DNI en todos los integrantes',
+      );
+    }
+
+    if (count < team.discipline.minPlayers || count > team.discipline.maxPlayers) {
+      throw new BadRequestException(
+        `El equipo debe tener entre ${team.discipline.minPlayers} y ${team.discipline.maxPlayers} jugadores. Tiene ${count}.`,
+      );
+    }
+
+    if (
+      team.discipline.genderPolicy === GenderPolicy.MALE &&
+      team.participants.some((p) => p.gender === 'F')
+    ) {
+      throw new BadRequestException('Esta disciplina es solo masculina');
+    }
+
+    if (
+      team.discipline.genderPolicy === GenderPolicy.FEMALE &&
+      team.participants.some((p) => p.gender === 'M')
+    ) {
+      throw new BadRequestException('Esta disciplina es solo femenina');
+    }
+  }
+
   async validate(id: number, validatedById: number) {
-    const voucher = await this.prisma.voucher.findUnique({ where: { id } });
+    const voucher = await this.prisma.voucher.findUnique({
+      where: { id },
+      include: {
+        team: {
+          include: {
+            participants: true,
+            discipline: true,
+          },
+        },
+      },
+    });
     if (!voucher) throw new NotFoundException('Comprobante no encontrado');
+    this.validateTeamRules(voucher.team);
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.voucher.update({

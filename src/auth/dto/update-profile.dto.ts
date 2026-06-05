@@ -1,11 +1,13 @@
 import { IsInt, IsOptional, IsString, Matches } from 'class-validator';
 
 export class UpdateProfileDto {
+  @IsOptional()
   @IsInt()
-  facultyId!: number;
+  facultyId?: number;
 
+  @IsOptional()
   @IsInt()
-  schoolId!: number;
+  schoolId?: number;
 
   @IsOptional()
   @IsString()
