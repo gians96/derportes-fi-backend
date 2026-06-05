@@ -9,6 +9,16 @@ API REST del **Sistema de Deportes de la Facultad de Ingeniería (UNDC)**, const
 - [data-model.md](./data-model.md) — Modelo de datos (Prisma) y enums.
 - [deployment.md](./deployment.md) — Despliegue (Docker / Dokploy), variables de entorno.
 
+## Flujo actual
+
+- Correos institucionales numéricos son `STUDENT`; correos institucionales no
+  numéricos son `OTHER`.
+- `STUDENT` completa facultad/escuela. `OTHER` completa solo DNI validado con
+  Decolecta y no pertenece a facultad ni escuela dentro del sistema.
+- `/registrations/mine` muestra equipos donde el usuario es delegado o jugador.
+- `/admin/inscripciones` es el centro único para gestionar equipos gratuitos y
+  de pago; `/admin/vouchers` queda como compatibilidad.
+
 ## Stack
 
 | Capa            | Tecnología                                  |

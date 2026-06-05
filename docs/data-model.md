@@ -7,7 +7,7 @@ Provider: `mysql` (MariaDB externa). Fuente de verdad:
 
 | Enum                 | Valores |
 | -------------------- | ------- |
-| `Role`               | `OWNER_SYSTEM`, `ADMIN_SYSTEM`, `STUDENT` |
+| `Role`               | `OWNER_SYSTEM`, `ADMIN_SYSTEM`, `STUDENT`, `OTHER` |
 | `Gender`             | `M`, `F`, `O` |
 | `DisciplineModality` | `TEAM`, `INDIVIDUAL` |
 | `GenderPolicy`       | `MALE`, `FEMALE`, `MIXED`, `FREE` |
@@ -40,8 +40,10 @@ User 0/1 ──* Participant (vínculo opcional al usuario real)
 ## Notas de diseño
 
 - **User**: `email` único; `googleSub` único y opcional (pre-registro sin Google
-  hasta el primer login). `isActive` controla el acceso (soft-delete). `dni`,
-  `studentCode` opcionales; `facultyId`/`schoolId` opcionales.
+  hasta el primer login). `isActive` controla el acceso (soft-delete). `STUDENT`
+  usa `studentCode`, facultad y escuela; `OTHER` identifica a usuarios
+  institucionales no estudiantiles con `dni` validado por Decolecta y sin
+  facultad/escuela.
 - **Discipline**: `cost` es `Decimal(10,2)`; `maxTeams = 0` significa sin límite;
   `registrationDeadline` cierra inscripciones. `participantType` (`STUDENT` por
   defecto) define la fuente de validación de integrantes: `STUDENT` valida
@@ -51,7 +53,8 @@ User 0/1 ──* Participant (vínculo opcional al usuario real)
 - **Participant**: guarda `fullName`/`studentCode`/`dni` (snapshot del padrón) y
   puede vincularse a un `User` real vía `userId`. El vínculo se crea
   automáticamente al inscribir un equipo y al loguear/completar perfil, casando
-  por `studentCode` o `dni`.
+  por `studentCode` o `dni`. El delegado responsable de la inscripción vive en
+  `Team.delegateId`; no necesita formar parte de la lista de jugadores.
 - **Voucher**: 1:1 con `Team`; `imageUrl` apunta a `uploads/vouchers/...`.
 - **Match** / **Standing**: soporte para brackets (eliminación) y tabla de
   posiciones (puntos). Endpoints de avance/resultados pendientes (ver roadmap).

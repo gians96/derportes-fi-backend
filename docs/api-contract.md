@@ -4,7 +4,7 @@
 - **Formato**: JSON salvo `POST /registrations` que es `multipart/form-data`.
 - **Auth**: header `Authorization: Bearer <jwt>`. El token se obtiene en
   `POST /auth/google`.
-- **Roles**: `OWNER_SYSTEM`, `ADMIN_SYSTEM`, `STUDENT`.
+- **Roles**: `OWNER_SYSTEM`, `ADMIN_SYSTEM`, `STUDENT`, `OTHER`.
 
 Notación de la columna *Auth*:
 - `público` — sin token.
@@ -17,9 +17,10 @@ Notación de la columna *Auth*:
 
 ### `POST /auth/google` — `público`
 Inicia sesión con el `idToken` de Google Identity. Solo se aceptan correos del
-dominio institucional (`INSTITUTIONAL_DOMAIN`). En el primer login de un
-estudiante se enriquece su perfil contra el padrón SIVIRENO y se **vinculan**
-los `Participant` previos que coincidan por `studentCode` o `dni`.
+dominio institucional (`INSTITUTIONAL_DOMAIN`). Los correos configurados como
+owner/admin conservan su rol; los correos numéricos son `STUDENT`; los correos
+institucionales no numéricos son `OTHER`. En el login se **vinculan** los
+`Participant` previos que coincidan por `studentCode` o `dni`.
 ```json
 // request
 { "idToken": "<google-id-token>" }
@@ -39,14 +40,18 @@ Errores: `401` correo no institucional / token inválido.
 Devuelve el perfil del usuario del token (incluye `studentCode` y `dni`).
 
 ### `PATCH /auth/me/profile` — `auth`
-Completa facultad/escuela (primer login del estudiante). Acepta `dni` opcional:
-se usa cuando el correo **no** corresponde a un código de estudiante, para poder
-vincular sus inscripciones por DNI.
+Completa el perfil según el rol.
+
+Para `STUDENT`, exige facultad y escuela profesional:
 ```json
-{ "facultyId": 1, "schoolId": 3, "dni": "12345678" }
+{ "facultyId": 1, "schoolId": 3 }
 ```
-Valida que la escuela pertenezca a la facultad y que el `dni` tenga 8 dígitos.
-Tras guardar, vincula los `Participant` que coincidan por `dni`.
+
+Para `OTHER`, exige solo DNI. No guarda facultad ni escuela; valida el DNI con
+Decolecta, actualiza `fullName` y vincula participantes por `dni`:
+```json
+{ "dni": "12345678" }
+```
 
 ---
 
@@ -63,9 +68,9 @@ cuando hay exactamente un resultado** (privacidad). `404` si no hay coincidencia
 única.
 
 ### `GET /academic/dni?numero=<8 dígitos>` — `auth`
-Consulta **RENIEC vía Decolecta** (disciplinas de tipo `OTHER`/externos). Valida
-que `numero` tenga 8 dígitos. `404` si el DNI no existe; `503` si falta el token
-de Decolecta. Devuelve `AcademicPerson` con `studentCode: null`.
+Consulta **RENIEC vía Decolecta** (disciplinas de tipo `OTHER`). Valida que
+`numero` tenga 8 dígitos. `404` si el DNI no existe; `503` si falta el token de
+Decolecta. Devuelve `AcademicPerson` con `studentCode: null`.
 
 > Detalle de los servicios externos en
 > [Integraciones externas](#integraciones-externas).
@@ -156,9 +161,12 @@ de Decolecta. Devuelve `AcademicPerson` con `studentCode: null`.
 | PATCH  | `/registrations/:id/approve` | admin | |
 | PATCH  | `/registrations/:id/reject`  | admin | `{ "reason": "…" }` |
 
-> El panel admin separa la gestión por tipo de disciplina: los equipos
-> **gratuitos** se validan en `/admin/inscripciones` (`?isPaid=false`) y los de
-> **pago** en `/admin/vouchers`.
+> El panel principal de administración es `/admin/inscripciones`. Allí se
+> gestionan equipos gratuitos y de pago en un solo flujo. Para pagos, el modal
+> muestra el voucher incrustado y usa `/vouchers/:id/validate` para validar y
+> aprobar; el rechazo principal se realiza con `/registrations/:id/reject` para
+> permitir una nueva inscripción. `/admin/vouchers` queda como vista secundaria
+> de compatibilidad.
 
 ### `POST /registrations` (multipart/form-data)
 | Campo            | Tipo   | Obligatorio | Notas |
@@ -167,17 +175,17 @@ de Decolecta. Devuelve `AcademicPerson` con `studentCode: null`.
 | `teamName`       | string | sí          | |
 | `phone`          | string | no          | |
 | `operationNumber`| string | si pagada   | nº de operación del voucher |
-| `delegateId`     | number | no          | **solo lo respeta si el actor es admin/owner** (equipo manual) |
-| `participants`   | string | sí          | **JSON** del arreglo (ver ↓) |
+| `delegateId`     | number | no          | **solo lo respeta si el actor es admin/owner** (equipo manual); en flujo público el delegado es el usuario autenticado |
+| `participants`   | string | sí          | **JSON** del arreglo de jugadores (ver ↓); el delegado no va aquí salvo que también juegue y se agregue como integrante |
 | `voucher`        | file   | si pagada   | imagen del comprobante |
 
 ```jsonc
 // participants (JSON.stringify)
 [
   { "fullName": "PEREZ JUAN", "studentCode": "2020...", "dni": "12345678",
-    "gender": "M", "isDelegate": true },
+    "gender": "M" },
   { "fullName": "...", "studentCode": "...", "dni": null, "gender": "F",
-    "isDelegate": false }
+    "countsAsPlayer": true }
 ]
 ```
 Reglas del servidor: plazo de inscripción vigente, mín/máx de jugadores,
@@ -214,16 +222,17 @@ vinculado).
 | POST   | `/users`              | admin | Pre-registro por correo (ver ↓) |
 | PATCH  | `/users/:id`          | admin | `{ fullName?, email?, dni?, facultyId?, schoolId? }` |
 | PATCH  | `/users/:id/active`   | admin | `{ "isActive": false }` |
-| PATCH  | `/users/:id/role`     | admin | `{ "role": "STUDENT" }` |
+| PATCH  | `/users/:id/role`     | admin | `{ "role": "STUDENT" }` o `{ "role": "OTHER" }` |
 
 ```json
 // POST /users  (pre-registro: se vincula al primer login con Google)
-{ "email": "x@undc.edu.pe", "fullName": "…", "role": "STUDENT",
-  "facultyId": 1, "schoolId": 3, "dni": "12345678" }
+{ "email": "x@undc.edu.pe", "fullName": "…", "role": "OTHER",
+  "dni": "12345678" }
 ```
-Reglas: un `ADMIN_SYSTEM` solo puede gestionar/crear `STUDENT`; no se puede
-inhabilitar a un `OWNER_SYSTEM` ni a uno mismo. Un usuario con `isActive=false`
-no puede autenticarse (rechazado en `JwtStrategy`).
+Reglas: un `ADMIN_SYSTEM` puede gestionar/crear roles no administrativos
+(`STUDENT` y `OTHER`); no se puede inhabilitar a un `OWNER_SYSTEM` ni a uno
+mismo. Un usuario `OTHER` no requiere `facultyId` ni `schoolId`. Un usuario con
+`isActive=false` no puede autenticarse (rechazado en `JwtStrategy`).
 
 ---
 
@@ -266,9 +275,10 @@ integrantes. Las URLs y credenciales se configuran por variables de entorno
   (`https://api.decolecta.com/v1/reniec/dni`) y `DECOLECTA_TOKEN`.
 - **Método**: `GET ?numero=<8 dígitos>` con header
   `Authorization: Bearer <DECOLECTA_TOKEN>`.
-- **Consumido por**: `GET /academic/dni`.
-- **Uso**: validar integrantes de disciplinas `participantType = OTHER`
-  (externos, no estudiantes).
+- **Consumido por**: `GET /academic/dni` y `PATCH /auth/me/profile` para
+  usuarios `OTHER`.
+- **Uso**: validar integrantes de disciplinas `participantType = OTHER` y
+  completar el perfil de usuarios institucionales no estudiantiles.
 - **Respuesta cruda**: `{ first_name, first_last_name, second_last_name,
   full_name, document_number }` → se mapea a `AcademicPerson { fullName:
   full_name, dni: document_number, studentCode: null }`.
