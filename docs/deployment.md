@@ -10,6 +10,8 @@ Build multi-stage (Bun para construir, Node 22 alpine para ejecutar). Ver
 
 - Expone el puerto **3001** y arranca con `node dist/main.js`.
 - Crea `uploads/vouchers` dentro del contenedor.
+- El runtime es Alpine; Prisma debe incluir `linux-musl-openssl-3.0.x` en
+  `binaryTargets` y el contenedor instala `openssl`.
 
 ```powershell
 docker build -t deportes-fi-backend .
