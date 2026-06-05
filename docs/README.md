@@ -11,13 +11,17 @@ API REST del **Sistema de Deportes de la Facultad de Ingeniería (UNDC)**, const
 
 ## Flujo actual
 
-- Correos institucionales numéricos son `STUDENT`; correos institucionales no
-  numéricos son `OTHER`.
+- Cualquier correo verificado por Google puede iniciar sesión. Los correos
+  `@undc.edu.pe` numéricos son `STUDENT`; el resto entra como `OTHER`.
 - `STUDENT` completa facultad/escuela. `OTHER` completa solo DNI validado con
   Decolecta y no pertenece a facultad ni escuela dentro del sistema.
-- `/registrations/mine` muestra equipos donde el usuario es delegado o jugador.
+- `/registrations/mine` muestra equipos donde el usuario es delegado o jugador
+  vinculado.
 - `/admin/inscripciones` es el centro único para gestionar equipos gratuitos y
-  de pago; `/admin/vouchers` queda como compatibilidad.
+  de pago, incluyendo teléfono de contacto del equipo/delegado; `/admin/vouchers`
+  queda como compatibilidad.
+- Toda la API tiene rate limit global por IP para proteger el uso de la
+  plataforma.
 
 ## Stack
 

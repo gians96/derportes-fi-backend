@@ -47,8 +47,8 @@ Ingeniería UNDC. Documentación detallada en [`docs/`](./docs/README.md).
 
 ## Reglas de negocio clave (no romper)
 
-- Solo correos `@undc.edu.pe` inician sesión; el rol se decide en BD /
-  `OWNER_EMAILS`/`ADMIN_EMAILS`.
+- Cualquier correo verificado por Google inicia sesión; `@undc.edu.pe`
+  numérico es `STUDENT`, el resto es `OTHER`, salvo `OWNER_EMAILS`/`ADMIN_EMAILS`.
 - `ADMIN_SYSTEM` solo crea/gestiona usuarios `STUDENT`; no toca admins/owners.
 - No inhabilitar a un `OWNER_SYSTEM` ni a uno mismo.
 - Inscripción: respetar `registrationDeadline`, mín/máx jugadores, política de
@@ -56,12 +56,16 @@ Ingeniería UNDC. Documentación detallada en [`docs/`](./docs/README.md).
   obligatorio si la disciplina es `isPaid`.
 - `delegateId` en `POST /registrations` **solo** se respeta si el actor es
   admin/owner (creación manual de equipos).
+- El rate limit es global por IP y vive como guard de aplicación; no hacerlo
+  específico de Decolecta o de un endpoint aislado.
 
 ## Seguridad
 
 - Nunca commitear `.env` (ya está en `.gitignore`). Usa `.env.example` como
   plantilla.
 - No loguear secretos ni el JWT. CORS controlado por `CORS_ORIGIN`.
+- Mantener activo el rate limit global (`APP_RATE_LIMIT_WINDOW_MS` /
+  `APP_RATE_LIMIT_MAX_REQUESTS`) para proteger la plataforma.
 - Validar tipo/tamaño de los archivos de voucher (Multer).
 
 ## Antes de dar por terminado

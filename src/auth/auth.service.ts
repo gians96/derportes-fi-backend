@@ -17,7 +17,6 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private readonly oauthClient: OAuth2Client;
   private readonly googleClientId: string;
-  private readonly institutionalDomain: string;
   private readonly ownerEmails: string[];
   private readonly adminEmails: string[];
 
@@ -28,8 +27,6 @@ export class AuthService {
     private readonly academic: AcademicService,
   ) {
     this.googleClientId = this.config.get<string>('GOOGLE_CLIENT_ID') ?? '';
-    this.institutionalDomain =
-      this.config.get<string>('INSTITUTIONAL_DOMAIN') ?? 'undc.edu.pe';
     this.oauthClient = new OAuth2Client(this.googleClientId);
     this.ownerEmails = this.parseEmails(
       this.config.get<string>('OWNER_EMAILS'),
@@ -63,13 +60,6 @@ export class AuthService {
   }> {
     const payload = await this.verifyGoogleToken(idToken);
     const email = (payload.email ?? '').toLowerCase();
-    const domain = email.split('@')[1];
-
-    if (domain !== this.institutionalDomain) {
-      throw new UnauthorizedException(
-        `Solo se permiten correos @${this.institutionalDomain}`,
-      );
-    }
 
     const code = email.split('@')[0];
     const user = await this.upsertUser(email, code, payload);
@@ -112,8 +102,10 @@ export class AuthService {
   private resolveRole(email: string): Role {
     if (this.ownerEmails.includes(email)) return Role.OWNER_SYSTEM;
     if (this.adminEmails.includes(email)) return Role.ADMIN_SYSTEM;
-    const account = email.split('@')[0] ?? '';
-    return /^\d+$/.test(account) ? Role.STUDENT : Role.OTHER;
+    const [account, domain] = email.split('@');
+    return domain === 'undc.edu.pe' && /^\d+$/.test(account ?? '')
+      ? Role.STUDENT
+      : Role.OTHER;
   }
 
   private async upsertUser(
@@ -270,4 +262,5 @@ export class AuthService {
     await this.linkParticipants(user);
     return this.getProfile(userId);
   }
+
 }

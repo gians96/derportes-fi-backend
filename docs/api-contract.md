@@ -16,10 +16,10 @@ Notación de la columna *Auth*:
 ## Auth
 
 ### `POST /auth/google` — `público`
-Inicia sesión con el `idToken` de Google Identity. Solo se aceptan correos del
-dominio institucional (`INSTITUTIONAL_DOMAIN`). Los correos configurados como
-owner/admin conservan su rol; los correos numéricos son `STUDENT`; los correos
-institucionales no numéricos son `OTHER`. En el login se **vinculan** los
+Inicia sesión con el `idToken` de Google Identity. Cualquier correo verificado
+por Google puede autenticarse. Los correos configurados como owner/admin
+conservan su rol; los correos numéricos `@undc.edu.pe` son `STUDENT`; los demás
+correos son `OTHER`. En el login se **vinculan** los
 `Participant` previos que coincidan por `studentCode` o `dni`.
 ```json
 // request
@@ -34,7 +34,13 @@ institucionales no numéricos son `OTHER`. En el login se **vinculan** los
   }
 }
 ```
-Errores: `401` correo no institucional / token inválido.
+Errores: `401` token inválido o correo Google no verificado.
+
+### Rate limit global
+
+Toda la API está protegida por un límite global por IP configurable con
+`APP_RATE_LIMIT_WINDOW_MS` y `APP_RATE_LIMIT_MAX_REQUESTS`. Si se excede,
+responde `429 Too Many Requests` y cabeceras `X-RateLimit-*`.
 
 ### `GET /auth/me` — `auth`
 Devuelve el perfil del usuario del token (incluye `studentCode` y `dni`).
@@ -173,7 +179,7 @@ Decolecta. Devuelve `AcademicPerson` con `studentCode: null`.
 | ---------------- | ------ | ----------- | ----- |
 | `disciplineId`   | number | sí          | |
 | `teamName`       | string | sí          | |
-| `phone`          | string | no          | |
+| `phone`          | string | no          | Teléfono de contacto del equipo/delegado; visible en admin |
 | `operationNumber`| string | si pagada   | nº de operación del voucher |
 | `delegateId`     | number | no          | **solo lo respeta si el actor es admin/owner** (equipo manual); en flujo público el delegado es el usuario autenticado |
 | `participants`   | string | sí          | **JSON** del arreglo de jugadores (ver ↓); el delegado no va aquí salvo que también juegue y se agregue como integrante |
@@ -278,7 +284,7 @@ integrantes. Las URLs y credenciales se configuran por variables de entorno
 - **Consumido por**: `GET /academic/dni` y `PATCH /auth/me/profile` para
   usuarios `OTHER`.
 - **Uso**: validar integrantes de disciplinas `participantType = OTHER` y
-  completar el perfil de usuarios institucionales no estudiantiles.
+  completar el perfil de usuarios no estudiantiles.
 - **Respuesta cruda**: `{ first_name, first_last_name, second_last_name,
   full_name, document_number }` → se mapea a `AcademicPerson { fullName:
   full_name, dni: document_number, studentCode: null }`.
@@ -294,5 +300,6 @@ integrantes. Las URLs y credenciales se configuran por variables de entorno
 | 400    | Validación de DTO o regla de negocio (mensaje en `message`) |
 | 401    | Token ausente/ inválido o usuario inhabilitado |
 | 403    | Rol insuficiente para la operación |
+| 429    | Rate limit global excedido |
 | 404    | Recurso no encontrado |
 | 503    | Servicio externo no disponible (p. ej. `DECOLECTA_TOKEN` ausente) |

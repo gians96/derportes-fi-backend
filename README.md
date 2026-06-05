@@ -23,11 +23,11 @@ cp .env.example .env
 | `CORS_ORIGIN` | Orígenes permitidos, separados por coma |
 | `JWT_SECRET` / `JWT_EXPIRES_IN` | Configuración de JWT |
 | `GOOGLE_CLIENT_ID` | Client ID de Google (igual que el frontend) |
-| `INSTITUTIONAL_DOMAIN` | Dominio permitido (`undc.edu.pe`) |
 | `ACADEMIC_API_URL` | Endpoint del padrón SIVIRENO (estudiantes) |
 | `DECOLECTA_API_URL` / `DECOLECTA_TOKEN` | Endpoint y token RENIEC vía Decolecta (usuarios/participantes `OTHER` por DNI) |
 | `UPLOADS_DIR` | Directorio de archivos subidos (default `uploads`) |
 | `OWNER_EMAILS` / `ADMIN_EMAILS` | Correos con rol elevado (separados por coma) |
+| `APP_RATE_LIMIT_WINDOW_MS` / `APP_RATE_LIMIT_MAX_REQUESTS` | Límite global por IP para proteger toda la API |
 
 ## Base de datos
 
@@ -71,12 +71,12 @@ node dist/main.js
 ## Autenticación
 
 1. El frontend obtiene un **ID token** de Google y lo envía a `POST /auth/google`.
-2. El backend verifica el token, exige dominio `@undc.edu.pe` y extrae el código
-   (parte antes de `@`).
+2. El backend verifica el token de Google y extrae el código
+   (parte antes de `@`) cuando corresponde.
 3. El rol se resuelve por correo:
    - correos configurados en env conservan `OWNER_SYSTEM` o `ADMIN_SYSTEM`;
-   - correos numéricos como `123456789@undc.edu.pe` son `STUDENT`;
-   - correos institucionales no numéricos como `garias@undc.edu.pe` son `OTHER`.
+   - correos `@undc.edu.pe` numéricos como `123456789@undc.edu.pe` son `STUDENT`;
+   - cualquier otro correo verificado por Google es `OTHER`.
 4. Para `STUDENT` se intenta enriquecer el perfil contra el padrón académico por
    código. Para `OTHER`, el perfil se completa luego solo con DNI validado por
    Decolecta.
@@ -86,7 +86,7 @@ node dist/main.js
 
 - `STUDENT`: usuario estudiantil. Debe completar facultad y escuela profesional,
   y solo puede inscribir disciplinas para estudiantes.
-- `OTHER`: usuario institucional no estudiantil. No pertenece a facultad ni
+- `OTHER`: usuario no estudiantil. No pertenece a facultad ni
   escuela dentro del sistema; completa perfil solo con DNI. Puede ver e inscribir
   disciplinas para estudiantes y para otros.
 - `OWNER_SYSTEM` / `ADMIN_SYSTEM`: usuarios administrativos. Pueden crear equipos
@@ -96,6 +96,9 @@ El delegado es el responsable de la inscripción, pero no se guarda como jugador
 del equipo. Los jugadores se validan por `studentCode` en disciplinas
 `STUDENT`, y por `dni` en disciplinas `OTHER`. `/registrations/mine` devuelve
 equipos donde el usuario es delegado o integrante vinculado.
+
+La API aplica un rate limit global por IP a todos los endpoints. Al excederlo,
+responde `429 Too Many Requests` y cabeceras `X-RateLimit-*`.
 
 ## Docker / Dokploy
 

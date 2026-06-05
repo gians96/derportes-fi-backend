@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { PrismaModule } from './prisma/prisma.module';
@@ -13,6 +14,7 @@ import { VouchersModule } from './vouchers/vouchers.module';
 import { UsersModule } from './users/users.module';
 import { StandingsModule } from './standings/standings.module';
 import { AdminModule } from './admin/admin.module';
+import { AppRateLimitGuard } from './common/guards/app-rate-limit.guard';
 
 @Module({
   imports: [
@@ -33,5 +35,6 @@ import { AdminModule } from './admin/admin.module';
     StandingsModule,
     AdminModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: AppRateLimitGuard }],
 })
 export class AppModule {}

@@ -5,9 +5,8 @@
 Expone la API que da soporte al sistema de gestión deportiva de la Facultad de
 Ingeniería de la UNDC. Sus responsabilidades principales son:
 
-- **Autenticación institucional** con Google (solo correos `@undc.edu.pe`) y
-  emisión de JWT. Los correos numéricos son `STUDENT`; los correos
-  institucionales no numéricos son `OTHER`.
+- **Autenticación con Google** y emisión de JWT. Los correos `@undc.edu.pe`
+  numéricos son `STUDENT`; los demás correos verificados por Google son `OTHER`.
 - **Catálogo académico**: facultades y escuelas profesionales (CRUD).
 - **Eventos deportivos** y **disciplinas** configurables (modalidad por equipos o
   individual, política de género, formato de competencia, **tipo de participante**
@@ -26,6 +25,7 @@ Ingeniería de la UNDC. Sus responsabilidades principales son:
   incluyendo pre-registro por correo e inhabilitación lógica (`isActive`).
 - **Resultados, posiciones y partidos** (modelo listo en BD; ver roadmap).
 - **Dashboard** con métricas agregadas para el panel admin.
+- **Rate limit global por IP** para proteger toda la API ante uso abusivo.
 
 ## 2. Qué se quiere lograr
 
@@ -51,6 +51,7 @@ y seguridad en el servidor (no confiar en el cliente).
 - Gestión de usuarios: crear (pre-registro), editar, cambiar rol, habilitar /
   inhabilitar (`isActive`, validado en `JwtStrategy`).
 - Filtros de disciplinas por `eventId` / `facultyId` / `schoolId`.
+- Rate limit global por IP configurable desde variables de entorno.
 
 ### Pendiente / futuro
 - Módulo de **partidos** (`Match`) y avance de brackets para formato

@@ -41,8 +41,8 @@ User 0/1 ──* Participant (vínculo opcional al usuario real)
 
 - **User**: `email` único; `googleSub` único y opcional (pre-registro sin Google
   hasta el primer login). `isActive` controla el acceso (soft-delete). `STUDENT`
-  usa `studentCode`, facultad y escuela; `OTHER` identifica a usuarios
-  institucionales no estudiantiles con `dni` validado por Decolecta y sin
+  usa `studentCode`, facultad y escuela; `OTHER` identifica a usuarios no
+  estudiantiles con `dni` validado por Decolecta y sin
   facultad/escuela.
 - **Discipline**: `cost` es `Decimal(10,2)`; `maxTeams = 0` significa sin límite;
   `registrationDeadline` cierra inscripciones. `participantType` (`STUDENT` por
