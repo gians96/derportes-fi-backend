@@ -3,6 +3,7 @@ import { Prisma, RegistrationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDisciplineDto } from './dto/create-discipline.dto';
 import { UpdateDisciplineDto } from './dto/update-discipline.dto';
+import { sanitizeRichText } from '../common/rich-text';
 
 @Injectable()
 export class DisciplinesService {
@@ -71,8 +72,8 @@ export class DisciplinesService {
         maxTeams: dto.maxTeams,
         isPaid: dto.isPaid,
         cost: dto.cost !== undefined ? new Prisma.Decimal(dto.cost) : undefined,
-        rulesText: dto.rulesText,
-        extraInfo: dto.extraInfo,
+        rulesText: sanitizeRichText(dto.rulesText),
+        extraInfo: sanitizeRichText(dto.extraInfo),
         registrationDeadline: new Date(dto.registrationDeadline),
       },
     });
@@ -97,8 +98,12 @@ export class DisciplinesService {
         ...(dto.maxTeams !== undefined && { maxTeams: dto.maxTeams }),
         ...(dto.isPaid !== undefined && { isPaid: dto.isPaid }),
         ...(dto.cost !== undefined && { cost: new Prisma.Decimal(dto.cost) }),
-        ...(dto.rulesText !== undefined && { rulesText: dto.rulesText }),
-        ...(dto.extraInfo !== undefined && { extraInfo: dto.extraInfo }),
+        ...(dto.rulesText !== undefined && {
+          rulesText: sanitizeRichText(dto.rulesText),
+        }),
+        ...(dto.extraInfo !== undefined && {
+          extraInfo: sanitizeRichText(dto.extraInfo),
+        }),
         ...(dto.registrationDeadline !== undefined && {
           registrationDeadline: new Date(dto.registrationDeadline),
         }),

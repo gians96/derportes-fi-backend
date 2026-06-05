@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { sanitizeRichText } from '../common/rich-text';
 
 @Injectable()
 export class EventsService {
@@ -46,7 +47,7 @@ export class EventsService {
     return this.prisma.sportEvent.create({
       data: {
         name: dto.name,
-        description: dto.description,
+        description: sanitizeRichText(dto.description),
         facultyId: dto.facultyId,
         schoolId: dto.schoolId ?? null,
         startDate: new Date(dto.startDate),
@@ -62,7 +63,9 @@ export class EventsService {
       where: { id },
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
-        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.description !== undefined && {
+          description: sanitizeRichText(dto.description),
+        }),
         ...(dto.facultyId !== undefined && { facultyId: dto.facultyId }),
         ...(dto.schoolId !== undefined && { schoolId: dto.schoolId }),
         ...(dto.startDate !== undefined && {
