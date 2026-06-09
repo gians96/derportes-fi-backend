@@ -74,4 +74,23 @@ export class CreateDisciplineDto {
 
   @IsDateString()
   registrationDeadline!: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  winPoints?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  drawPoints?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  lossPoints?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  allowDraw?: boolean;
 }

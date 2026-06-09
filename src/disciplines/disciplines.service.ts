@@ -9,7 +9,7 @@ import { sanitizeRichText } from '../common/rich-text';
 export class DisciplinesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(filters?: {
+  async findAll(filters?: {
     eventId?: number;
     facultyId?: number;
     schoolId?: number;
@@ -22,7 +22,7 @@ export class DisciplinesService {
     if (filters?.eventId) where.eventId = filters.eventId;
     if (Object.keys(eventWhere).length) where.event = eventWhere;
 
-    return this.prisma.discipline.findMany({
+    const disciplines = await this.prisma.discipline.findMany({
       where,
       include: {
         event: { select: { id: true, name: true } },
@@ -30,6 +30,11 @@ export class DisciplinesService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    return disciplines.map(({ _count, ...discipline }) => ({
+      ...discipline,
+      teamsCount: _count.teams,
+    }));
   }
 
   async findOne(id: number) {
@@ -55,7 +60,8 @@ export class DisciplinesService {
     if (!discipline) {
       throw new NotFoundException('Disciplina no encontrada');
     }
-    return discipline;
+    const { _count, ...disciplineData } = discipline;
+    return { ...disciplineData, teamsCount: _count.teams };
   }
 
   create(dto: CreateDisciplineDto) {
@@ -75,6 +81,10 @@ export class DisciplinesService {
         rulesText: sanitizeRichText(dto.rulesText),
         extraInfo: sanitizeRichText(dto.extraInfo),
         registrationDeadline: new Date(dto.registrationDeadline),
+        winPoints: dto.winPoints,
+        drawPoints: dto.drawPoints,
+        lossPoints: dto.lossPoints,
+        allowDraw: dto.allowDraw,
       },
     });
   }
@@ -107,6 +117,10 @@ export class DisciplinesService {
         ...(dto.registrationDeadline !== undefined && {
           registrationDeadline: new Date(dto.registrationDeadline),
         }),
+        ...(dto.winPoints !== undefined && { winPoints: dto.winPoints }),
+        ...(dto.drawPoints !== undefined && { drawPoints: dto.drawPoints }),
+        ...(dto.lossPoints !== undefined && { lossPoints: dto.lossPoints }),
+        ...(dto.allowDraw !== undefined && { allowDraw: dto.allowDraw }),
       },
     });
   }

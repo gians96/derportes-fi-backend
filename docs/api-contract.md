@@ -4,12 +4,13 @@
 - **Formato**: JSON salvo `POST /registrations` que es `multipart/form-data`.
 - **Auth**: header `Authorization: Bearer <jwt>`. El token se obtiene en
   `POST /auth/google`.
-- **Roles**: `OWNER_SYSTEM`, `ADMIN_SYSTEM`, `STUDENT`, `OTHER`.
+- **Roles**: `OWNER_SYSTEM`, `ADMIN_SYSTEM`, `REFEREE`, `STUDENT`, `OTHER`.
 
 Notación de la columna *Auth*:
 - `público` — sin token.
 - `auth` — cualquier usuario autenticado.
 - `admin` — solo `OWNER_SYSTEM` o `ADMIN_SYSTEM`.
+- `fixture` — `OWNER_SYSTEM`, `ADMIN_SYSTEM` o `REFEREE`.
 
 ---
 
@@ -127,8 +128,8 @@ Decolecta. Devuelve `AcademicPerson` con `studentCode: null`.
 
 | Método | Ruta                | Auth  | Notas |
 | ------ | ------------------- | ----- | ----- |
-| GET    | `/disciplines`      | público | Filtros opcionales `?eventId=&facultyId=&schoolId=` |
-| GET    | `/disciplines/:id`  | público | Incluye `event` y `_count.teams` |
+| GET    | `/disciplines`      | público | Filtros opcionales `?eventId=&facultyId=&schoolId=`; cada disciplina incluye `teamsCount` |
+| GET    | `/disciplines/:id`  | público | Incluye `event`, equipos aprobados y `teamsCount` |
 | POST   | `/disciplines`      | admin | ver body ↓ |
 | PATCH  | `/disciplines/:id`  | admin | campos parciales |
 | DELETE | `/disciplines/:id`  | admin | |
@@ -149,11 +150,17 @@ Decolecta. Devuelve `AcademicPerson` con `studentCode: null`.
   "cost": 50.0,
   "rulesText": "…",
   "extraInfo": "…",
-  "registrationDeadline": "2026-06-20"
+  "registrationDeadline": "2026-06-20T23:59:00.000Z",
+  "winPoints": 3,
+  "drawPoints": 1,
+  "lossPoints": 0,
+  "allowDraw": true
 }
 ```
 `participantType` define cómo se buscan los integrantes en el frontend:
 `STUDENT` → `GET /academic/student`; `OTHER` → `GET /academic/dni`.
+`teamsCount` devuelve la cantidad total de equipos inscritos en la disciplina
+(sin filtrar por estado) para mostrar el avance de cupos en el panel admin.
 
 ---
 
@@ -161,7 +168,7 @@ Decolecta. Devuelve `AcademicPerson` con `studentCode: null`.
 
 | Método | Ruta                         | Auth  | Notas |
 | ------ | ---------------------------- | ----- | ----- |
-| GET    | `/registrations?status=`     | admin | `status` ∈ `PENDING\|APPROVED\|REJECTED\|CANCELLED`; filtros `?eventId=&facultyId=&schoolId=&disciplineId=&isPaid=` |
+| GET    | `/registrations?status=`     | admin | `status` ∈ `PENDING\|APPROVED\|REJECTED\|CANCELLED`; filtros `?eventId=&facultyId=&schoolId=&disciplineId=&isPaid=&participantType=` |
 | GET    | `/registrations/mine`        | auth  | Equipos donde el usuario es **delegado o integrante** (match por `userId`) |
 | POST   | `/registrations`             | auth  | **multipart/form-data** ver ↓ |
 | PATCH  | `/registrations/:id/approve` | admin | |
@@ -228,7 +235,7 @@ vinculado).
 | POST   | `/users`              | admin | Pre-registro por correo (ver ↓) |
 | PATCH  | `/users/:id`          | admin | `{ fullName?, email?, dni?, facultyId?, schoolId? }` |
 | PATCH  | `/users/:id/active`   | admin | `{ "isActive": false }` |
-| PATCH  | `/users/:id/role`     | admin | `{ "role": "STUDENT" }` o `{ "role": "OTHER" }` |
+| PATCH  | `/users/:id/role`     | admin | `{ "role": "STUDENT" }`, `{ "role": "OTHER" }` o `{ "role": "REFEREE" }` |
 
 ```json
 // POST /users  (pre-registro: se vincula al primer login con Google)
@@ -236,8 +243,8 @@ vinculado).
   "dni": "12345678" }
 ```
 Reglas: un `ADMIN_SYSTEM` puede gestionar/crear roles no administrativos
-(`STUDENT` y `OTHER`); no se puede inhabilitar a un `OWNER_SYSTEM` ni a uno
-mismo. Un usuario `OTHER` no requiere `facultyId` ni `schoolId`. Un usuario con
+(`STUDENT`, `OTHER` y `REFEREE`); no se puede inhabilitar a un `OWNER_SYSTEM` ni a uno
+mismo. Un usuario `OTHER` o `REFEREE` no requiere `facultyId` ni `schoolId`. Un usuario con
 `isActive=false` no puede autenticarse (rechazado en `JwtStrategy`).
 
 ---
@@ -246,7 +253,12 @@ mismo. Un usuario `OTHER` no requiere `facultyId` ni `schoolId`. Un usuario con
 
 | Método | Ruta                          | Auth   | Notas |
 | ------ | ----------------------------- | ------ | ----- |
-| GET    | `/standings/:disciplineId`    | público| Tabla de posiciones |
+| GET    | `/standings/:disciplineId`    | público| Tabla, fixture y partidos publicados |
+| GET    | `/disciplines/:disciplineId/fixture` | fixture | Fixture admin con equipos aprobados, partidos y tabla |
+| POST   | `/disciplines/:disciplineId/fixture/generate` | admin | `{ "resetPlayed": false }`; genera round-robin o eliminación simple |
+| PATCH  | `/matches/:id`                | fixture | `{ "scheduledAt"?, "status"? }` |
+| PATCH  | `/matches/:id/result`         | fixture | `{ "homeScore": 2, "awayScore": 1 }`; recalcula tabla o avanza llave |
+| POST   | `/disciplines/:disciplineId/standings/recalculate` | admin | Recalcula tabla desde partidos jugados |
 | GET    | `/results/mine`               | auth   | Historial del usuario |
 
 ---

@@ -13,7 +13,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { RegistrationStatus, Role } from '@prisma/client';
+import { ParticipantType, RegistrationStatus, Role } from '@prisma/client';
 import { RegistrationsService } from './registrations.service';
 import {
   CreateRegistrationDto,
@@ -43,6 +43,7 @@ export class RegistrationsController {
     @Query('schoolId') schoolId?: string,
     @Query('disciplineId') disciplineId?: string,
     @Query('isPaid') isPaid?: string,
+    @Query('participantType') participantType?: ParticipantType,
   ) {
     return this.registrations.findAll({
       status,
@@ -51,6 +52,7 @@ export class RegistrationsController {
       schoolId: schoolId ? Number(schoolId) : undefined,
       disciplineId: disciplineId ? Number(disciplineId) : undefined,
       isPaid: isPaid === undefined ? undefined : isPaid === 'true',
+      participantType,
     });
   }
 

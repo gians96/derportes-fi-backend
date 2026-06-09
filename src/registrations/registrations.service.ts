@@ -28,10 +28,14 @@ export class RegistrationsService {
     schoolId?: number;
     disciplineId?: number;
     isPaid?: boolean;
+    participantType?: ParticipantType;
   }) {
     const disciplineWhere: Prisma.DisciplineWhereInput = {};
     if (filters?.eventId) disciplineWhere.eventId = filters.eventId;
     if (filters?.isPaid !== undefined) disciplineWhere.isPaid = filters.isPaid;
+    if (filters?.participantType) {
+      disciplineWhere.participantType = filters.participantType;
+    }
 
     const eventWhere: Prisma.SportEventWhereInput = {};
     if (filters?.facultyId) eventWhere.facultyId = filters.facultyId;
