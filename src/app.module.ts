@@ -13,6 +13,7 @@ import { RegistrationsModule } from './registrations/registrations.module';
 import { VouchersModule } from './vouchers/vouchers.module';
 import { UsersModule } from './users/users.module';
 import { StandingsModule } from './standings/standings.module';
+import { SchedulingModule } from './scheduling/scheduling.module';
 import { AdminModule } from './admin/admin.module';
 import { AppRateLimitGuard } from './common/guards/app-rate-limit.guard';
 
@@ -33,6 +34,7 @@ import { AppRateLimitGuard } from './common/guards/app-rate-limit.guard';
     VouchersModule,
     UsersModule,
     StandingsModule,
+    SchedulingModule,
     AdminModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: AppRateLimitGuard }],

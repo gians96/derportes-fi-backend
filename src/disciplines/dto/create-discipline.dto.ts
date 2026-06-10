@@ -93,4 +93,14 @@ export class CreateDisciplineDto {
   @IsOptional()
   @IsBoolean()
   allowDraw?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  matchDurationMinutes?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  courtsCount?: number;
 }

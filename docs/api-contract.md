@@ -264,6 +264,36 @@ mismo. Un usuario `OTHER` o `REFEREE` no requiere `facultyId` ni `schoolId`. Un 
 
 ---
 
+## Programación de horarios
+
+| Método | Ruta                  | Auth  | Notas |
+| ------ | --------------------- | ----- | ----- |
+| POST   | `/scheduling/round-one` | admin | Asigna `scheduledAt` a los partidos de **round 1** de las disciplinas indicadas |
+
+```json
+// POST /scheduling/round-one
+{ "disciplineIds": [1, 3, 5], "startAt": "2026-06-15T14:00:00.000Z",
+  "slotMinutes": 30, "dryRun": true }
+```
+
+Reglas del algoritmo (coloreo de grafos por franjas):
+- Solo considera partidos con `round = 1` y **ambos equipos definidos**.
+- Dos partidos están en conflicto si comparten al menos un jugador
+  (`countsAsPlayer = true`), identificado por `studentCode` → `dni` → `userId` →
+  nombre normalizado. Los partidos en conflicto nunca caen en la misma franja, de
+  modo que **ningún estudiante juega dos partidos en simultáneo**.
+- El tiempo se divide en franjas uniformes de `slotMinutes` (por defecto, la mayor
+  `matchDurationMinutes` entre las disciplinas seleccionadas).
+- Por franja, cada disciplina no supera su `courtsCount` (lozas independientes por
+  disciplina). Los partidos se asignan por mayor grado de conflicto primero
+  (Welsh–Powell), buscando la franja más temprana disponible.
+- `dryRun: true` (default) solo devuelve la propuesta; `dryRun: false` persiste los
+  `scheduledAt`. Respuesta: `{ applied, startAt, slotMinutes, slotsUsed,
+  totalMatches, disciplines, matches: [{ matchId, disciplineId, disciplineName,
+  homeTeam*, awayTeam*, slot, court, scheduledAt }] }`.
+
+---
+
 ## Admin
 
 | Método | Ruta                | Auth  | Notas |

@@ -154,6 +154,8 @@ model Discipline {
   drawPoints           Int                @default(1)
   lossPoints           Int                @default(0)
   allowDraw            Boolean            @default(true)
+  matchDurationMinutes Int                @default(30)
+  courtsCount          Int                @default(1)
 
   teams     Team[]
   matches   Match[]

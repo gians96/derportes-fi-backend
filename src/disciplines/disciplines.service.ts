@@ -93,6 +93,8 @@ export class DisciplinesService {
         drawPoints: dto.drawPoints,
         lossPoints: dto.lossPoints,
         allowDraw: dto.allowDraw,
+        matchDurationMinutes: dto.matchDurationMinutes,
+        courtsCount: dto.courtsCount,
       },
     });
   }
@@ -129,6 +131,10 @@ export class DisciplinesService {
         ...(dto.drawPoints !== undefined && { drawPoints: dto.drawPoints }),
         ...(dto.lossPoints !== undefined && { lossPoints: dto.lossPoints }),
         ...(dto.allowDraw !== undefined && { allowDraw: dto.allowDraw }),
+        ...(dto.matchDurationMinutes !== undefined && {
+          matchDurationMinutes: dto.matchDurationMinutes,
+        }),
+        ...(dto.courtsCount !== undefined && { courtsCount: dto.courtsCount }),
       },
     });
   }

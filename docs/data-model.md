@@ -50,7 +50,9 @@ User 0/1 ──* Participant (vínculo opcional al usuario real)
   defecto) define la fuente de validación de integrantes: `STUDENT` valida
   contra el padrón SIVIRENO por código; `OTHER` valida por DNI contra RENIEC
   (Decolecta). En formato `POINTS`, `winPoints`, `drawPoints`, `lossPoints` y
-  `allowDraw` configuran el cálculo de la tabla.
+  `allowDraw` configuran el cálculo de la tabla. `matchDurationMinutes` (default 30)
+  y `courtsCount` (lozas disponibles, default 1) alimentan al programador de
+  horarios (`POST /scheduling/round-one`).
 - **Team**: nace `PENDING`; `rejectionReason` cuando se rechaza.
 - **Participant**: guarda `fullName`/`studentCode`/`dni` (snapshot del padrón) y
   puede vincularse a un `User` real vía `userId`. El vínculo se crea
