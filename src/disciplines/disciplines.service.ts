@@ -26,7 +26,11 @@ export class DisciplinesService {
       where,
       include: {
         event: { select: { id: true, name: true } },
-        _count: { select: { teams: true } },
+        _count: {
+          select: {
+            teams: { where: { status: RegistrationStatus.APPROVED } },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -54,7 +58,11 @@ export class DisciplinesService {
           },
           orderBy: { createdAt: 'desc' },
         },
-        _count: { select: { teams: true } },
+        _count: {
+          select: {
+            teams: { where: { status: RegistrationStatus.APPROVED } },
+          },
+        },
       },
     });
     if (!discipline) {

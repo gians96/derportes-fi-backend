@@ -177,14 +177,70 @@ export class StandingsService {
         await tx.standing.deleteMany({ where: { disciplineId } });
       }
 
+      const ordered = this.shuffle(discipline.teams);
       if (discipline.format === CompetitionFormat.POINTS) {
-        await this.createRoundRobin(tx, discipline.id, discipline.teams);
+        await this.createRoundRobin(tx, discipline.id, ordered);
       } else {
-        await this.createElimination(tx, discipline.id, discipline.teams);
+        await this.createElimination(tx, discipline.id, ordered);
       }
 
       if (discipline.format === CompetitionFormat.POINTS) {
         await this.recalculateStandingsTx(tx, discipline.id);
+      }
+    });
+    return this.getFixture(disciplineId);
+  }
+
+  async arrangeFixture(disciplineId: number, teamOrder: number[]) {
+    await this.prisma.$transaction(async (tx) => {
+      const discipline = await tx.discipline.findUnique({
+        where: { id: disciplineId },
+        include: {
+          teams: {
+            where: { status: RegistrationStatus.APPROVED },
+            select: { id: true },
+          },
+          matches: { select: { id: true, status: true } },
+        },
+      });
+      if (!discipline) throw new NotFoundException('Disciplina no encontrada');
+
+      const approvedIds = discipline.teams.map((t) => t.id);
+      const uniqueOrder = new Set(teamOrder);
+      const sameLength =
+        teamOrder.length === approvedIds.length &&
+        uniqueOrder.size === teamOrder.length;
+      const sameSet =
+        sameLength && approvedIds.every((id) => uniqueOrder.has(id));
+      if (!sameSet) {
+        throw new BadRequestException(
+          'El orden debe incluir exactamente a los equipos aprobados, sin repetidos ni faltantes',
+        );
+      }
+      if (approvedIds.length < 2) {
+        throw new BadRequestException(
+          'Se necesitan al menos dos equipos aprobados para generar fixture',
+        );
+      }
+
+      const hasPlayed = discipline.matches.some(
+        (m) => m.status === MatchStatus.PLAYED,
+      );
+      if (hasPlayed) {
+        throw new BadRequestException(
+          'No puedes reordenar el sorteo con partidos ya jugados',
+        );
+      }
+
+      await tx.match.deleteMany({ where: { disciplineId } });
+      await tx.standing.deleteMany({ where: { disciplineId } });
+
+      const orderedTeams = teamOrder.map((id) => ({ id }));
+      if (discipline.format === CompetitionFormat.POINTS) {
+        await this.createRoundRobin(tx, discipline.id, orderedTeams);
+        await this.recalculateStandingsTx(tx, discipline.id);
+      } else {
+        await this.createElimination(tx, discipline.id, orderedTeams);
       }
     });
     return this.getFixture(disciplineId);
@@ -321,42 +377,57 @@ export class StandingsService {
     disciplineId: number,
     teams: { id: number }[],
   ) {
-    const bracketSize = this.nextPowerOfTwo(teams.length);
-    const slots: ({ id: number } | null)[] = Array.from(
-      { length: bracketSize },
-      (_, index) => teams[index] ?? null,
-    );
-    const rounds = Math.log2(bracketSize);
+    // Llave que minimiza los byes: en cada ronda se empareja la mayor cantidad
+    // posible de equipos y, si la cantidad es impar, solo el ultimo pasa libre.
     const byes: { match: Match; winnerTeamId: number }[] = [];
 
-    for (let round = 1; round <= rounds; round += 1) {
-      const matchCount = bracketSize / 2 ** round;
-      for (let index = 0; index < matchCount; index += 1) {
-        const home = round === 1 ? slots[index * 2] : null;
-        const away = round === 1 ? slots[index * 2 + 1] : null;
-        const winnerTeamId =
-          round === 1 && home && !away
-            ? home.id
-            : round === 1 && !home && away
-              ? away.id
-              : null;
-        const match = await tx.match.create({
-          data: {
-            disciplineId,
-            round,
-            homeTeamId: home?.id ?? null,
-            awayTeamId: away?.id ?? null,
-            winnerTeamId,
-            status: winnerTeamId ? MatchStatus.PLAYED : MatchStatus.PENDING,
-          },
-        });
-        if (winnerTeamId) byes.push({ match, winnerTeamId });
-      }
+    // Ronda 1: empareja consecutivamente el orden recibido.
+    const round1Units = Math.ceil(teams.length / 2);
+    for (let i = 0; i < round1Units; i += 1) {
+      const home = teams[i * 2] ?? null;
+      const away = teams[i * 2 + 1] ?? null;
+      const winnerTeamId = home && !away ? home.id : null;
+      const match = await tx.match.create({
+        data: {
+          disciplineId,
+          round: 1,
+          homeTeamId: home?.id ?? null,
+          awayTeamId: away?.id ?? null,
+          winnerTeamId,
+          status: winnerTeamId ? MatchStatus.PLAYED : MatchStatus.PENDING,
+        },
+      });
+      if (winnerTeamId) byes.push({ match, winnerTeamId });
     }
 
+    // Rondas siguientes: vacias; cada ronda tiene la mitad (hacia arriba) de
+    // unidades de la anterior, hasta llegar a la final.
+    let round = 1;
+    let prevUnits = round1Units;
+    while (prevUnits > 1) {
+      round += 1;
+      const units = Math.ceil(prevUnits / 2);
+      for (let i = 0; i < units; i += 1) {
+        await tx.match.create({
+          data: { disciplineId, round, status: MatchStatus.PENDING },
+        });
+      }
+      prevUnits = units;
+    }
+
+    // Avanza los byes de la primera ronda (puede encadenar byes consecutivos).
     for (const bye of byes) {
       await this.advanceWinner(tx, bye.match, bye.winnerTeamId);
     }
+  }
+
+  private shuffle<T>(items: T[]): T[] {
+    const result = [...items];
+    for (let i = result.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
   }
 
   private async advanceWinner(tx: Tx, match: Match, winnerTeamId: number) {
@@ -373,14 +444,14 @@ export class StandingsService {
     const matchIndex = currentRoundMatches.findIndex((m) => m.id === match.id);
     if (matchIndex < 0) return;
 
-    const nextMatch = nextRoundMatches[Math.floor(matchIndex / 2)];
+    const nextIndex = Math.floor(matchIndex / 2);
+    const nextMatch = nextRoundMatches[nextIndex];
     if (!nextMatch) return;
-    const updates =
-      matchIndex % 2 === 0
-        ? { homeTeamId: winnerTeamId }
-        : { awayTeamId: winnerTeamId };
-    const currentSlot =
-      matchIndex % 2 === 0 ? nextMatch.homeTeamId : nextMatch.awayTeamId;
+    const isHome = matchIndex % 2 === 0;
+    const updates = isHome
+      ? { homeTeamId: winnerTeamId }
+      : { awayTeamId: winnerTeamId };
+    const currentSlot = isHome ? nextMatch.homeTeamId : nextMatch.awayTeamId;
 
     if (
       nextMatch.status === MatchStatus.PLAYED &&
@@ -392,10 +463,24 @@ export class StandingsService {
       );
     }
 
-    await tx.match.update({
+    // Si al siguiente partido nunca le llegara un rival (numero impar de
+    // unidades en esta ronda), es un bye: el equipo avanza directo otra ronda.
+    const awayFeedIndex = nextIndex * 2 + 1;
+    const nextIsBye = awayFeedIndex >= currentRoundMatches.length;
+
+    const updated = await tx.match.update({
       where: { id: nextMatch.id },
-      data: updates,
+      data: {
+        ...updates,
+        ...(nextIsBye
+          ? { winnerTeamId, status: MatchStatus.PLAYED }
+          : {}),
+      },
     });
+
+    if (nextIsBye) {
+      await this.advanceWinner(tx, updated, winnerTeamId);
+    }
   }
 
   private async recalculateStandingsTx(tx: Tx, disciplineId: number) {
@@ -485,12 +570,6 @@ export class StandingsService {
         },
       });
     }
-  }
-
-  private nextPowerOfTwo(value: number) {
-    let power = 1;
-    while (power < value) power *= 2;
-    return power;
   }
 
   private mapMatches(

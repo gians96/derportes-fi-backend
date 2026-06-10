@@ -18,6 +18,7 @@ import {
 } from '../common/decorators/current-user.decorator';
 import type { RequestUser } from '../common/decorators/current-user.decorator';
 import { GenerateFixtureDto } from './dto/generate-fixture.dto';
+import { ArrangeFixtureDto } from './dto/arrange-fixture.dto';
 import { UpdateMatchDto } from './dto/update-match.dto';
 import { UpdateMatchResultDto } from './dto/update-match-result.dto';
 
@@ -45,6 +46,16 @@ export class StandingsController {
     @Body() dto: GenerateFixtureDto,
   ) {
     return this.standings.generateFixture(disciplineId, dto.resetPlayed);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.OWNER_SYSTEM, Role.ADMIN_SYSTEM)
+  @Post('disciplines/:disciplineId/fixture/arrange')
+  arrangeFixture(
+    @Param('disciplineId', ParseIntPipe) disciplineId: number,
+    @Body() dto: ArrangeFixtureDto,
+  ) {
+    return this.standings.arrangeFixture(disciplineId, dto.teamOrder);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

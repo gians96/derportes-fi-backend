@@ -255,7 +255,8 @@ mismo. Un usuario `OTHER` o `REFEREE` no requiere `facultyId` ni `schoolId`. Un 
 | ------ | ----------------------------- | ------ | ----- |
 | GET    | `/standings/:disciplineId`    | público| Tabla, fixture y partidos publicados |
 | GET    | `/disciplines/:disciplineId/fixture` | fixture | Fixture admin con equipos aprobados, partidos y tabla |
-| POST   | `/disciplines/:disciplineId/fixture/generate` | admin | `{ "resetPlayed": false }`; genera round-robin o eliminación simple |
+| POST   | `/disciplines/:disciplineId/fixture/generate` | admin | `{ "resetPlayed": false }`; sorteo **aleatorio** de equipos aprobados (round-robin o eliminación simple). En eliminación **minimiza los byes**: empareja la mayor cantidad posible por ronda y solo deja un pase libre cuando la cantidad es impar (soporta cantidades impares / no potencias de 2). |
+| POST   | `/disciplines/:disciplineId/fixture/arrange`  | admin | `{ "teamOrder": [3, 1, 2, ...] }`; reconstruye el fixture con el orden manual de equipos. Requiere exactamente los IDs aprobados (sin repetidos ni faltantes) y que **no** existan partidos jugados. |
 | PATCH  | `/matches/:id`                | fixture | `{ "scheduledAt"?, "status"? }` |
 | PATCH  | `/matches/:id/result`         | fixture | `{ "homeScore": 2, "awayScore": 1 }`; recalcula tabla o avanza llave |
 | POST   | `/disciplines/:disciplineId/standings/recalculate` | admin | Recalcula tabla desde partidos jugados |
